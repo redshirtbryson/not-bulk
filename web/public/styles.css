@@ -1,0 +1,10 @@
+:root { --fg: #1a1a1a; --bg: #fafafa; --accent: #2d6cdf; }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+main { max-width: 720px; margin: 0 auto; padding: 2rem 1rem; }
+a { color: var(--accent); }
