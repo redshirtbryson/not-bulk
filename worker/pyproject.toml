@@ -10,15 +10,23 @@ requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.28.1",
     "numpy>=2.4.6",
+    "onnxruntime>=1.27.0",
     "opencv-python-headless>=5.0.0.93",
     "psycopg-pool>=3.3.1",
     "psycopg[binary]>=3.3.4",
     "pyyaml>=6.0.3",
+    "qdrant-client<2",
     "uuid6>=2025.0.1",
 ]
 
 [project.scripts]
 notbulk = "notbulk:main"
+
+[project.optional-dependencies]
+build = [
+    "onnx>=1.22.0",
+    "torch>=2.13.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -29,5 +37,6 @@ packages = ["notbulk"]
 
 [dependency-groups]
 dev = [
+    "onnx>=1.22.0",
     "pytest>=9.1.1",
 ]
