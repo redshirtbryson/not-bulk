@@ -1,0 +1,5 @@
+{
+  "_note": "Placeholder baseline. The first real eval run against the ground-truth set establishes these numbers via `--update-baseline`.",
+  "auto_accept_rate": 0.0,
+  "hash_tier_hit_rate": 0.0
+}
