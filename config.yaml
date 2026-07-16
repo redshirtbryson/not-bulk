@@ -1,0 +1,20 @@
+models:
+  embedding: dinov2_vits14
+  embedding_onnx: worker/models/dinov2_vits14_int8.onnx
+  llm: claude-haiku-4-5-20251001
+crop: { width: 734, height: 1024, webp_quality: 80 }
+detection:
+  aspect: 0.714            # 2.5/3.5
+  aspect_tolerance: 0.12
+  min_area_frac: 0.005
+  max_cards_per_photo: 30
+  sharpness_min: 45.0
+hash:
+  accept_distance: 10
+  min_margin: 4
+  augmentations_per_card: 6
+cascade:
+  auto_accept: 80
+  hash_only_accept: 90
+  unreadable_below: 40
+qdrant: { url: "http://127.0.0.1:6333" }

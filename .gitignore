@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Node
+node_modules/
+
+# Worker runtime artifacts (rebuildable, large)
+worker/data/
+worker/models/
+*.onnx
+
+# Eval scratch
+eval/last_run.json
+
+# Local project-scoped binaries (see CLAUDE.md "Local binaries")
+bin/
