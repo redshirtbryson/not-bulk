@@ -16,10 +16,9 @@ Phase 1 runs entirely on the MINTY workstation. See `docs/superpowers/specs/` an
 - **Zero wrong auto-accepts is a HARD invariant.** ≥90% auto-accept rate is a soft target.
   When they conflict, thresholds move toward precision and the delta goes to the validation queue.
   A card whose ID is accepted but whose finish was deferred does NOT count as an auto-accept.
-- **The eval suite is required before merging any pipeline change.** Any change to detection,
-  hashing, embeddings, OCR, scoring, or thresholds must run `python -m eval.regression` and
-  attach its output to the change. The suite hard-fails on any wrong auto-accept and regression-fails
-  if the auto-accept rate drops below the committed baseline.
+- **Merge gate:** any change to detection, hashing, embeddings, OCR, scoring, or thresholds MUST run
+  `eval/regression.py` (`cd worker && uv run python ../eval/regression.py`) and include its output;
+  the suite hard-fails on any wrong auto-accept and fails on an auto-accept-rate regression.
 
 ## Services
 - All Docker services bind `127.0.0.1` only. Start with `docker compose up -d`.
