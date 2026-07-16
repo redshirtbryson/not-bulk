@@ -75,3 +75,26 @@ class FakeOcrEngine:
         page = self._results[self._i] if self._i < len(self._results) else []
         self._i += 1
         return [page]
+
+
+class _FakeMessages:
+    def __init__(self, canned_text, raise_if_called):
+        self._canned_text = canned_text
+        self._raise = raise_if_called
+        self.calls = []
+
+    def create(self, **kwargs):
+        if self._raise:
+            raise AssertionError("Anthropic client must NOT be called on cache hit")
+        self.calls.append(kwargs)
+        # Anthropic response: .content is a list of blocks with .text
+        block = type("Block", (), {"type": "text", "text": self._canned_text})()
+        return type("Msg", (), {"content": [block]})()
+
+
+class FakeAnthropic:
+    """Stand-in for anthropic.Anthropic. Set raise_if_called=True to assert the
+    client is never hit (cache-hit path)."""
+
+    def __init__(self, canned_text="", raise_if_called=False):
+        self.messages = _FakeMessages(canned_text, raise_if_called)
