@@ -53,8 +53,10 @@ def to_gray(img: np.ndarray) -> np.ndarray:
 def sharpness(img: np.ndarray) -> float:
     """Laplacian-variance sharpness, normalized per megapixel.
 
-    Normalizing by megapixels (var * (h*w/1e6)) makes the threshold in
-    config.yaml (detection.sharpness_min) resolution-independent (design A8).
+    Normalizing by megapixels (var / (h*w/1e6)) makes the threshold in
+    config.yaml (detection.sharpness_min) resolution-independent (design A8):
+    the score must not grow with pixel count for the same content, so a
+    high-resolution blurry photo can never outscore a low-resolution sharp one.
     """
     gray = to_gray(img) if img.ndim == 3 else img
     h, w = gray.shape[:2]
@@ -62,4 +64,4 @@ def sharpness(img: np.ndarray) -> float:
     megapixels = (h * w) / 1e6
     if megapixels <= 0:
         return 0.0
-    return var * megapixels
+    return var / megapixels

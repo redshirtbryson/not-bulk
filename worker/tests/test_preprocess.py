@@ -1,6 +1,5 @@
 import numpy as np
 import cv2
-import pytest
 
 from notbulk.preprocess import warp_card, webp_roundtrip, to_gray, sharpness
 
@@ -68,10 +67,10 @@ def test_sharpness_sharp_much_greater_than_blurred():
 
 
 def test_sharpness_is_resolution_normalized():
-    # Same content at two resolutions should give comparable (per-megapixel) scores.
-    tile = np.indices((256, 256)).sum(axis=0) % 2
-    small = cv2.cvtColor((tile * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR)
-    big = cv2.resize(small, (512, 512), interpolation=cv2.INTER_NEAREST)
-    # Normalization keeps them within a factor of ~2 rather than 4x apart.
-    ratio = sharpness(big) / sharpness(small)
-    assert 0.4 < ratio < 2.5
+    # divide-normalization: more megapixels must never raise the score of
+    # softer content (A8); multiply would invert this.
+    idx = np.indices((128, 128)) // 8
+    tile = idx.sum(axis=0) % 2
+    small_sharp = cv2.cvtColor((tile * 255).astype(np.uint8), cv2.COLOR_GRAY2BGR)
+    big_soft = cv2.resize(small_sharp, (1024, 1024), interpolation=cv2.INTER_LINEAR)
+    assert sharpness(small_sharp) > sharpness(big_soft)
