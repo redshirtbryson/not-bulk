@@ -1,3 +1,12 @@
+"""Cost-ordered identification cascade (H -> A -> B -> C) with spec 4.3 scoring.
+
+Query/ref codec parity (design A4): after orientation is settled, the upright
+crop is passed through preprocess.webp_roundtrip once, before any hashing/
+embedding/OCR stage, so query crops share the same WebP codec fingerprint as
+the reference index (refs are letterboxed then webp-roundtripped when the
+hash/embed indexes are built — see scripts/build_hash_index.py and
+scripts/build_embed_index.py).
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,7 +20,7 @@ from . import llm as llm_mod
 from . import ocr as ocr_mod
 from .hash_index import HashIndex
 from .hashing import compute_hashes, dct_phash
-from .preprocess import sharpness, to_gray
+from .preprocess import sharpness, to_gray, webp_roundtrip
 from .types import Identification, MethodResult
 
 if TYPE_CHECKING:
@@ -104,8 +113,13 @@ def identify_crop(crop_bgr: np.ndarray, deps: CascadeDeps, cfg: dict) -> Identif
             candidates=[],
         )
 
-    # --- Orientation ---
+    # --- Orientation (on the raw crop; codec parity is applied after rotation
+    # is settled, matching how refs are letterboxed-then-webp'd) ---
     upright, rotation = orient(crop_bgr, deps.hash_index)
+
+    # --- Codec parity (design A4): one webp round-trip, shared by every
+    # downstream method (hash/embed/OCR) so the query fingerprint matches refs ---
+    upright = webp_roundtrip(upright, quality=cfg["crop"]["webp_quality"])
 
     methods: list[MethodResult] = []
 
@@ -188,13 +202,17 @@ def identify_crop(crop_bgr: np.ndarray, deps: CascadeDeps, cfg: dict) -> Identif
                     candidates=_top3_candidates(methods),
                 )
 
-    # --- No agreement anywhere: validation with top-3 candidates ---
+    # --- No agreement anywhere: validation with top-3 candidates, unless
+    # confidence is low enough to be 'unreadable' (spec 4.3, design cfg
+    # cascade.unreadable_below). card_ref_id stays None either way; candidates
+    # are still reported as computed. ---
     best = max((m.score for m in methods), default=0.0)
     confidence = min(60, int(round(100 * best)))
+    stage = "unreadable" if confidence < casc_cfg["unreadable_below"] else "validation"
     return Identification(
         card_ref_id=None,
         confidence=confidence,
-        accepted_stage="validation",
+        accepted_stage=stage,
         rotation=rotation,
         methods=methods,
         candidates=_top3_candidates(methods),

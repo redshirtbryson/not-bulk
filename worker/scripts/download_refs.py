@@ -89,8 +89,15 @@ async def _get_page(client: httpx.AsyncClient, params: dict) -> dict:
 
 
 async def _download_image(
-    client: httpx.AsyncClient, sem: asyncio.Semaphore, card_id: str, url: str
+    client: httpx.AsyncClient, sem: asyncio.Semaphore, card_id: str, url: str,
+    skipped: list[tuple[str, str]] | None = None,
 ) -> None:
+    """Fetch one reference image. Retries only transient failures (429 and
+    5xx/transport errors); a permanent 4xx is logged and recorded in
+    `skipped`, never raised — pokemontcg.io has genuine 404s in its catalog,
+    and one dead URL must not abort the whole asyncio.gather batch. The
+    builders (build_hash_index.py, build_embed_index.py) already tolerate a
+    missing local scan for a card."""
     dest = REFS_DIR / f"{card_id}.png"
     if not needs_download(dest):
         return
@@ -99,20 +106,40 @@ async def _download_image(
         for attempt in range(MAX_RETRIES):
             try:
                 resp = await client.get(url)
-                if resp.status_code == 429 or resp.status_code >= 500:
-                    raise httpx.HTTPStatusError(
-                        "retryable", request=resp.request, response=resp
-                    )
-                resp.raise_for_status()
-                tmp = dest.with_suffix(".png.part")
-                tmp.write_bytes(resp.content)
-                tmp.rename(dest)
-                break
-            except (httpx.HTTPStatusError, httpx.TransportError):
+            except httpx.TransportError:
                 if attempt == MAX_RETRIES - 1:
-                    raise
+                    print(f"skip {card_id}: transport error (retries exhausted)",
+                          file=sys.stderr)
+                    if skipped is not None:
+                        skipped.append((card_id, "transport error"))
+                    return
                 await asyncio.sleep(delay)
                 delay *= 2
+                continue
+
+            if resp.status_code == 429 or resp.status_code >= 500:
+                if attempt == MAX_RETRIES - 1:
+                    print(f"skip {card_id}: HTTP {resp.status_code} (retries exhausted)",
+                          file=sys.stderr)
+                    if skipped is not None:
+                        skipped.append((card_id, f"HTTP {resp.status_code}"))
+                    return
+                await asyncio.sleep(delay)
+                delay *= 2
+                continue
+
+            if resp.status_code >= 400:
+                # Permanent client error (e.g. 404) — never retry, never raise
+                # out of the gather; just record and move on.
+                print(f"skip {card_id}: HTTP {resp.status_code}", file=sys.stderr)
+                if skipped is not None:
+                    skipped.append((card_id, f"HTTP {resp.status_code}"))
+                return
+
+            tmp = dest.with_suffix(".png.part")
+            tmp.write_bytes(resp.content)
+            tmp.rename(dest)
+            break
         await asyncio.sleep(POLITE_DELAY)
 
 
@@ -130,6 +157,7 @@ async def run(set_ids: list[str] | None) -> None:
         query = " OR ".join(f"set.id:{s}" for s in set_ids)
 
     total = 0
+    skipped: list[tuple[str, str]] = []
     sem = asyncio.Semaphore(MAX_CONCURRENCY)
     headers = {"X-Api-Key": api_key}
     async with httpx.AsyncClient(headers=headers, timeout=30.0) as client:
@@ -148,7 +176,7 @@ async def run(set_ids: list[str] | None) -> None:
 
             await asyncio.gather(
                 *(
-                    _download_image(client, sem, c["id"], c["images"]["large"])
+                    _download_image(client, sem, c["id"], c["images"]["large"], skipped)
                     for c in cards
                 )
             )
@@ -162,6 +190,10 @@ async def run(set_ids: list[str] | None) -> None:
             page += 1
 
     print(f"done: {total} cards synced into card_refs, images mirrored to {REFS_DIR}")
+    if skipped:
+        print(f"skipped {len(skipped)} image download(s) (permanent errors, catalog synced anyway):")
+        for card_id, reason in skipped:
+            print(f"  {card_id}: {reason}")
 
 
 def main(argv: list[str] | None = None) -> int:

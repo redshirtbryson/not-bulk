@@ -36,6 +36,7 @@ from qdrant_client import QdrantClient, models as qmodels
 # Allow `python scripts/build_embed_index.py` from the worker/ dir.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from notbulk.cli import resolve_config_path
 from notbulk.config import load_config
 from notbulk.db import get_pool
 from notbulk.embed import Embedder, QDRANT_COLLECTION, preprocess_to_tensor
@@ -140,7 +141,7 @@ def main() -> int:
                         help="cap number of refs (for smoke runs)")
     args = parser.parse_args()
 
-    cfg = load_config()
+    cfg = load_config(resolve_config_path(None))
     webp_quality = int(cfg["crop"]["webp_quality"])
 
     if not ONNX_PATH.exists():

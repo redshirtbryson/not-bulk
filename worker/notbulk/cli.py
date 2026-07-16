@@ -59,14 +59,16 @@ def _card_names(pool, card_ref_ids: list[str]) -> dict[str, str]:
     return {row[0]: row[1] for row in rows}
 
 
-def _build_deps(cfg: dict, pool, *, no_llm: bool):
+def _build_deps(cfg: dict, pool, *, no_llm: bool, cfg_path: str):
     hash_index = HashIndex.load(pool)
     if len(hash_index) == 0:
         raise SystemExit(
             "ref_hashes is empty — run scripts/build_hash_index.py first"
         )
 
-    onnx_path = cfg["models"]["embedding_onnx"]
+    # Resolved against the config file's parent (repo root), not cwd, so this
+    # works under the documented `cd worker && ...` invocations too.
+    onnx_path = str(Path(cfg_path).resolve().parent / cfg["models"]["embedding_onnx"])
     embedder = None
     qdrant = None
     if Path(onnx_path).is_file():
@@ -123,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
     cfg_path = resolve_config_path(args.config)
     cfg = load_config(cfg_path)
     pool = get_pool()
-    deps = _build_deps(cfg, pool, no_llm=args.no_llm)
+    deps = _build_deps(cfg, pool, no_llm=args.no_llm, cfg_path=cfg_path)
 
     # Pass 1: detect + identify everything, deferring name lookups so the whole
     # batch resolves with a single card_refs query afterwards (no N+1).

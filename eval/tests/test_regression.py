@@ -113,6 +113,65 @@ def _make_deps_stub():
     return _Deps()
 
 
+class _FakeHashIndex:
+    def __len__(self):
+        return 10
+
+
+def test_load_pipeline_resolves_onnx_relative_to_config_parent(tmp_path, monkeypatch):
+    """models.embedding_onnx is repo-root-relative; _load_pipeline must resolve
+    it against the CONFIG FILE's parent, not cwd (mirrors cli._build_deps)."""
+    models_dir = tmp_path / "worker" / "models"
+    models_dir.mkdir(parents=True)
+    onnx_file = models_dir / "dinov2_vits14_int8.onnx"
+    onnx_file.write_bytes(b"fake-onnx")
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text("models: {embedding_onnx: worker/models/dinov2_vits14_int8.onnx}\n")
+
+    cfg = {
+        "models": {"embedding_onnx": "worker/models/dinov2_vits14_int8.onnx"},
+        "qdrant": {"url": "http://127.0.0.1:6333"},
+    }
+
+    from notbulk.hash_index import HashIndex
+    from notbulk.embed import Embedder
+    from qdrant_client import QdrantClient
+
+    monkeypatch.setattr(regression, "get_pool", lambda: object())
+    monkeypatch.setattr(HashIndex, "load", classmethod(lambda cls, pool: _FakeHashIndex()))
+    constructed_paths = []
+    monkeypatch.setattr(Embedder, "__init__",
+                        lambda self, path: constructed_paths.append(path) or None)
+    monkeypatch.setattr(QdrantClient, "__init__", lambda self, **k: None)
+
+    other_cwd = tmp_path / "elsewhere"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+
+    deps = regression._load_pipeline(cfg, str(cfg_path))
+    assert deps.embedder is not None
+    assert constructed_paths == [str(onnx_file)]
+
+
+def test_load_pipeline_warns_when_onnx_absent(tmp_path, monkeypatch, capsys):
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text("models: {embedding_onnx: worker/models/missing.onnx}\n")
+    cfg = {
+        "models": {"embedding_onnx": "worker/models/missing.onnx"},
+        "qdrant": {"url": "http://127.0.0.1:6333"},
+    }
+    from notbulk.hash_index import HashIndex
+
+    monkeypatch.setattr(regression, "get_pool", lambda: object())
+    monkeypatch.setattr(HashIndex, "load", classmethod(lambda cls, pool: _FakeHashIndex()))
+
+    deps = regression._load_pipeline(cfg, str(cfg_path))
+    assert deps.embedder is None
+    assert deps.qdrant is None
+    err = capsys.readouterr().err
+    assert "ONNX model not found" in err
+
+
 def test_main_smoke_pass(tmp_path, monkeypatch):
     manifest = {"photos": [{
         "file": "IMG_001.jpg", "scenario": "clean",
@@ -133,7 +192,7 @@ def test_main_smoke_pass(tmp_path, monkeypatch):
         "models": {"embedding_onnx": "nope.onnx"},
         "qdrant": {"url": "http://127.0.0.1:6333"},
     })
-    monkeypatch.setattr(regression, "_load_pipeline", lambda cfg: _make_deps_stub())
+    monkeypatch.setattr(regression, "_load_pipeline", lambda cfg, cfg_path: _make_deps_stub())
 
     class _Det:
         def __init__(self, i):
@@ -167,7 +226,7 @@ def test_main_smoke_wrong_accept_exit_one(tmp_path, monkeypatch):
         "detection": {"sharpness_min": 45.0, "max_cards_per_photo": 30},
         "cascade": {"auto_accept": 80, "hash_only_accept": 90, "unreadable_below": 40},
         "models": {"embedding_onnx": "nope.onnx"}, "qdrant": {"url": "x"}})
-    monkeypatch.setattr(regression, "_load_pipeline", lambda cfg: _make_deps_stub())
+    monkeypatch.setattr(regression, "_load_pipeline", lambda cfg, cfg_path: _make_deps_stub())
 
     class _Det:
         def __init__(self, i):
@@ -202,7 +261,7 @@ def _setup_main_env(tmp_path, monkeypatch, ident):
         "models": {"embedding_onnx": "nope.onnx"},
         "qdrant": {"url": "http://127.0.0.1:6333"},
     })
-    monkeypatch.setattr(regression, "_load_pipeline", lambda cfg: _make_deps_stub())
+    monkeypatch.setattr(regression, "_load_pipeline", lambda cfg, cfg_path: _make_deps_stub())
 
     class _Det:
         def __init__(self, i):

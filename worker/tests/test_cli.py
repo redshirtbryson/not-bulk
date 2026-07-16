@@ -171,8 +171,8 @@ def test_main_llm_enabled_constructs_anthropic(tmp_path, monkeypatch):
     captured_deps = []
     real_build_deps = cli._build_deps
 
-    def _spy_build_deps(cfg_arg, pool, *, no_llm):
-        deps = real_build_deps(cfg_arg, pool, no_llm=no_llm)
+    def _spy_build_deps(cfg_arg, pool, *, no_llm, cfg_path):
+        deps = real_build_deps(cfg_arg, pool, no_llm=no_llm, cfg_path=cfg_path)
         captured_deps.append(deps)
         return deps
 
@@ -182,6 +182,56 @@ def test_main_llm_enabled_constructs_anthropic(tmp_path, monkeypatch):
     assert code == 0
     assert len(constructed) == 1
     assert captured_deps[0].anthropic is llm_stub
+
+
+def test_build_deps_resolves_onnx_relative_to_config_parent(tmp_path, monkeypatch):
+    """models.embedding_onnx in config.yaml is repo-root-relative; _build_deps
+    must resolve it against the CONFIG FILE's parent dir, not cwd, so it still
+    resolves when invoked as `cd worker && notbulk-scan ...`."""
+    repo_root = tmp_path / "repo"
+    models_dir = repo_root / "worker" / "models"
+    models_dir.mkdir(parents=True)
+    onnx_file = models_dir / "dinov2_vits14_int8.onnx"
+    onnx_file.write_bytes(b"fake-onnx")
+    cfg_path = repo_root / "config.yaml"
+    cfg_path.write_text("models: {embedding_onnx: worker/models/dinov2_vits14_int8.onnx}\n")
+
+    cfg = {
+        "models": {"embedding_onnx": "worker/models/dinov2_vits14_int8.onnx"},
+        "qdrant": {"url": "http://127.0.0.1:6333"},
+    }
+
+    constructed_paths = []
+    monkeypatch.setattr(cli, "Embedder", lambda path: constructed_paths.append(path) or object())
+    monkeypatch.setattr(cli, "get_pool", lambda: _FakePool())
+    monkeypatch.setattr(cli.HashIndex, "load", classmethod(lambda cls, pool: _FakeIndex()))
+
+    # cwd is somewhere unrelated to the repo root, proving resolution doesn't use cwd.
+    other_cwd = tmp_path / "elsewhere"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+
+    from qdrant_client import QdrantClient
+    monkeypatch.setattr(QdrantClient, "__init__", lambda self, **k: None)
+
+    deps = cli._build_deps(cfg, _FakePool(), no_llm=True, cfg_path=str(cfg_path))
+    assert deps.embedder is not None
+    assert constructed_paths == [str(onnx_file)]
+
+
+def test_build_deps_warns_and_skips_when_onnx_absent(tmp_path, monkeypatch, capsys):
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text("models: {embedding_onnx: worker/models/missing.onnx}\n")
+    cfg = {
+        "models": {"embedding_onnx": "worker/models/missing.onnx"},
+        "qdrant": {"url": "http://127.0.0.1:6333"},
+    }
+    monkeypatch.setattr(cli.HashIndex, "load", classmethod(lambda cls, pool: _FakeIndex()))
+    deps = cli._build_deps(cfg, _FakePool(), no_llm=True, cfg_path=str(cfg_path))
+    assert deps.embedder is None
+    assert deps.qdrant is None
+    err = capsys.readouterr().err
+    assert "ONNX model not found" in err
 
 
 def test_main_no_readable_photos_exit_one(tmp_path, monkeypatch):

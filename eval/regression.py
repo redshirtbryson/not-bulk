@@ -131,7 +131,7 @@ from notbulk.config import load_config  # noqa: E402
 from notbulk.db import get_pool  # noqa: E402
 
 
-def _load_pipeline(cfg: dict):
+def _load_pipeline(cfg: dict, cfg_path: str):
     """Build CascadeDeps against the real DB/index. Isolated so tests stub it."""
     from notbulk.cascade import CascadeDeps
     from notbulk.embed import Embedder
@@ -142,8 +142,15 @@ def _load_pipeline(cfg: dict):
     hash_index = HashIndex.load(pool)
     if len(hash_index) == 0:
         raise RuntimeError("ref_hashes is empty — run scripts/build_hash_index.py first")
-    onnx_path = cfg["models"]["embedding_onnx"]
-    embedder = Embedder(onnx_path) if Path(onnx_path).is_file() else None
+    # Resolved against the config file's parent (repo root), not cwd, so this
+    # works whether regression.py is invoked from the repo root or `cd worker`.
+    onnx_path = str(Path(cfg_path).resolve().parent / cfg["models"]["embedding_onnx"])
+    if Path(onnx_path).is_file():
+        embedder = Embedder(onnx_path)
+    else:
+        embedder = None
+        print(f"warning: ONNX model not found at {onnx_path}; skipping Method A",
+              file=sys.stderr)
     # qdrant-client is imported lazily so tests stubbing _load_pipeline never need it.
     qdrant = None
     if embedder is not None:
@@ -204,8 +211,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         from notbulk.cli import resolve_config_path
 
-        cfg = load_config(resolve_config_path(None))
-        deps = _load_pipeline(cfg)
+        cfg_path = resolve_config_path(None)
+        cfg = load_config(cfg_path)
+        deps = _load_pipeline(cfg, cfg_path)
     except Exception as exc:  # DB down, index empty, etc.
         print(f"config/data error: {exc}", file=sys.stderr)
         return 2

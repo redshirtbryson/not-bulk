@@ -979,7 +979,7 @@ requires-dist = [
     { name = "onnx", marker = "extra == 'build'", specifier = ">=1.22.0" },
     { name = "onnxruntime", specifier = ">=1.27.0" },
     { name = "opencv-python-headless", specifier = ">=5.0.0.93" },
-    { name = "paddleocr", specifier = ">=2.10.0" },
+    { name = "paddleocr", specifier = ">=2.10.0,<3" },
     { name = "paddlepaddle", specifier = ">=3.3.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.4" },
     { name = "psycopg-pool", specifier = ">=3.3.1" },

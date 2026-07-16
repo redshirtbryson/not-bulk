@@ -28,6 +28,7 @@ from uuid6 import uuid7
 # Allow `python scripts/build_hash_index.py` from the worker/ dir.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from notbulk.cli import resolve_config_path
 from notbulk.config import load_config
 from notbulk.db import get_pool
 from notbulk.preprocess import webp_roundtrip
@@ -125,7 +126,7 @@ def main() -> int:
     ap.add_argument("--limit", type=int, help="cap card count (smoke runs)")
     args = ap.parse_args()
 
-    cfg = load_config()
+    cfg = load_config(resolve_config_path(None))
     sets = args.sets.split(",") if args.sets else None
     pool = get_pool()
 

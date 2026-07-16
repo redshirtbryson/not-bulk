@@ -234,3 +234,43 @@ def test_identify_crop_no_agreement_is_validation_with_candidates(monkeypatch):
     assert result.confidence == min(60, int(round(100 * 0.55)))  # == 55
     # Top-3 distinct card_ref_ids by method score, highest first.
     assert result.candidates == ["sv4-1", "sv4-2", "sv4-3"]
+
+
+def test_identify_crop_no_agreement_low_confidence_is_unreadable(monkeypatch):
+    """Spec 4.3: confidence < unreadable_below(40) in the no-agreement
+    terminal branch is 'unreadable', not 'validation'. card_ref_id stays
+    None and candidates are still reported as computed."""
+    from notbulk.types import HashMatch
+
+    crop = _gradient_crop()
+    # Best method score ~0.1 -> confidence ~10, well under the 40 threshold.
+    hm = HashMatch(card_ref_id="sv4-1", score=0.1, distance=20, margin=0, agreement=1)
+    index = _FakeHashIndex(full_hit=("sv4-1", 20), hash_match=hm)
+    _llm_setup(monkeypatch, index, a_id="sv4-2", a_score=0.08, b_id="sv4-3",
+               b_score=0.05, c_id="sv4-4", c_score=0.02)
+    deps = _deps(index, embedder=object(), qdrant=object(), ocr_reader=object(),
+                 anthropic=object(), pool=object())
+    result = cascade.identify_crop(crop, deps, _cfg())
+    assert result.accepted_stage == "unreadable"
+    assert result.card_ref_id is None
+    assert result.confidence == 10
+    assert result.candidates == ["sv4-1", "sv4-2", "sv4-3"]
+
+
+def test_identify_crop_no_agreement_confidence_at_boundary_is_validation(monkeypatch):
+    """confidence exactly at unreadable_below(40) stays 'validation' — the
+    threshold is an exclusive lower bound (< 40 is unreadable, >= 40 isn't)."""
+    from notbulk.types import HashMatch
+
+    crop = _gradient_crop()
+    # best score 0.40 -> confidence == 40 exactly.
+    hm = HashMatch(card_ref_id="sv4-1", score=0.40, distance=9, margin=1, agreement=1)
+    index = _FakeHashIndex(full_hit=("sv4-1", 9), hash_match=hm)
+    _llm_setup(monkeypatch, index, a_id="sv4-2", a_score=0.30, b_id="sv4-3",
+               b_score=0.20, c_id="sv4-4", c_score=0.10)
+    deps = _deps(index, embedder=object(), qdrant=object(), ocr_reader=object(),
+                 anthropic=object(), pool=object())
+    result = cascade.identify_crop(crop, deps, _cfg())
+    assert result.confidence == 40
+    assert result.accepted_stage == "validation"
+    assert result.card_ref_id is None
