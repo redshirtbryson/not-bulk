@@ -181,3 +181,55 @@ def test_main_smoke_wrong_accept_exit_one(tmp_path, monkeypatch):
                         lambda crop, deps, cfg: _ident("sv4-WRONG", "h"))
     code = regression.main([])
     assert code == 1
+
+
+def _setup_main_env(tmp_path, monkeypatch, ident):
+    """Shared main() harness: one manifest card, stubbed pipeline returning `ident`."""
+    manifest = {"photos": [{
+        "file": "IMG_001.jpg", "scenario": "clean",
+        "cards": [{"card_ref_id": "sv4-1", "finish": "normal"}],
+    }]}
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest))
+    baseline_path = tmp_path / "baseline.json"
+    baseline_path.write_text(json.dumps({"auto_accept_rate": 0.0, "hash_tier_hit_rate": 0.0}))
+    monkeypatch.setattr(regression, "_MANIFEST", manifest_path)
+    monkeypatch.setattr(regression, "_BASELINE", baseline_path)
+    monkeypatch.setattr(regression, "_LAST_RUN", tmp_path / "last_run.json")
+    monkeypatch.setattr(regression, "load_config", lambda path=None: {
+        "detection": {"sharpness_min": 45.0, "max_cards_per_photo": 30},
+        "cascade": {"auto_accept": 80, "hash_only_accept": 90, "unreadable_below": 40},
+        "models": {"embedding_onnx": "nope.onnx"},
+        "qdrant": {"url": "http://127.0.0.1:6333"},
+    })
+    monkeypatch.setattr(regression, "_load_pipeline", lambda cfg: _make_deps_stub())
+
+    class _Det:
+        def __init__(self, i):
+            import numpy as np
+            self.crop = np.zeros((1024, 734, 3), dtype="uint8")
+            self.crop_index = i
+
+    monkeypatch.setattr(regression, "_read_photo", lambda path: object())
+    monkeypatch.setattr(regression, "_detect", lambda photo, cfg: [_Det(0)])
+    monkeypatch.setattr(regression, "_identify", lambda crop, deps, cfg: ident)
+    return baseline_path
+
+
+def test_update_baseline_refused_on_wrong_accept(tmp_path, monkeypatch):
+    """A run containing a wrong auto-accept must NEVER write the baseline:
+    exit 1 and baseline.json byte-identical to before (hard invariant)."""
+    baseline_path = _setup_main_env(tmp_path, monkeypatch, _ident("sv4-WRONG", "h"))
+    before = baseline_path.read_text()
+    code = regression.main(["--update-baseline"])
+    assert code == 1
+    assert baseline_path.read_text() == before
+
+
+def test_update_baseline_happy_path_writes_and_exits_zero(tmp_path, monkeypatch):
+    baseline_path = _setup_main_env(tmp_path, monkeypatch, _ident("sv4-1", "h"))
+    code = regression.main(["--update-baseline"])
+    assert code == 0
+    updated = json.loads(baseline_path.read_text())
+    assert updated["auto_accept_rate"] == 1.0
+    assert updated["hash_tier_hit_rate"] == 1.0

@@ -73,6 +73,8 @@ def _count_llm_calls(idents: list) -> int:
 
 
 def aggregate(rows: list[dict], llm_calls: int = 0) -> dict:
+    # auto_accept_rate denominator is ALL manifest cards (including missed,
+    # unreadable, and validation) — the 90% soft target is read against it.
     total = len(rows)
     accepted = [r for r in rows if r["outcome"].startswith("auto_accepted")]
     wrong = [r for r in rows if r["outcome"] == "auto_accepted_WRONG"]
@@ -226,7 +228,16 @@ def main(argv: list[str] | None = None) -> int:
     _LAST_RUN.write_text(json.dumps({"metrics": metrics, "rows": all_rows}, indent=2))
     _print_summary(metrics)
 
+    # Gate BEFORE honoring --update-baseline: a run containing a wrong
+    # auto-accept must never establish or overwrite the baseline (hard
+    # invariant, design A1). Deliberately updating the rate downward is
+    # legitimate when explicitly requested; a wrong accept never is.
+    passed, reason = check_regression(metrics, baseline)
+
     if args.update_baseline:
+        if metrics["wrong_auto_accepts"]["count"] > 0:
+            print(f"refusing to update baseline: {reason}", file=sys.stderr)
+            return 1
         _BASELINE.write_text(json.dumps({
             "auto_accept_rate": metrics["auto_accept_rate"],
             "hash_tier_hit_rate": metrics["hash_tier_hit_rate"],
@@ -234,7 +245,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"baseline updated -> {_BASELINE}")
         return 0
 
-    passed, reason = check_regression(metrics, baseline)
     print(f"result: {'PASS' if passed else 'FAIL'} — {reason}")
     return 0 if passed else 1
 
