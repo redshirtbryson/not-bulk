@@ -13,8 +13,41 @@ hash:
   accept_distance: 10
   min_margin: 4
   augmentations_per_card: 6
+  user_validated_cap_per_card: 20
 cascade:
   auto_accept: 80
   hash_only_accept: 90
   unreadable_below: 40
 qdrant: { url: "http://127.0.0.1:6333" }
+web:
+  port: 3000
+  base_url: "http://127.0.0.1:3000"
+  secure_cookies: false
+storage:
+  endpoint: "http://127.0.0.1:9000"
+  bucket: "notbulk"
+  access_key: "minioadmin"      # compose-local, not secret
+  secret_key: "minioadmin"      # compose-local, not secret
+  signed_url_ttl_seconds: 900
+mail: { smtp_host: "127.0.0.1", smtp_port: 1025, from: "NotBulk <magic@notbulk.local>" }
+auth:
+  session_absolute_days: 30
+  session_idle_days: 7
+  magic_link_expiry_minutes: 15
+  magic_links_per_email_hour: 3
+  magic_links_per_email_day: 10
+quotas:
+  batches_per_day: 5
+  photos_per_day: 50
+  cards_per_day: 600
+  fetches_per_day: 20
+  photos_per_batch: 10
+  anon_photos_per_batch: 3
+  max_photo_bytes: 10485760
+  max_pixels: 50000000
+  max_cards_per_photo: 30       # mirrors detection cap
+fetcher:
+  allowed_hosts: ["i.imgur.com","imgur.com","api.imgur.com","i.redd.it","www.reddit.com"]
+  max_bytes: 15728640
+  timeout_seconds: 20
+turnstile: { site_key: "1x00000000000000000000AA", secret: "1x0000000000000000000000000000000AA" }  # Cloudflare official test keys — always-pass; real keys via BWS at M5
