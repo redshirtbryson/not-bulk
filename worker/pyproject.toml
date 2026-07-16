@@ -19,6 +19,7 @@ dependencies = [
     "psycopg[binary]>=3.3.4",
     "pyyaml>=6.0.3",
     "qdrant-client<2",
+    "setuptools>=83.0.0",
     "uuid6>=2025.0.1",
 ]
 

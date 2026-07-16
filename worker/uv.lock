@@ -956,6 +956,7 @@ dependencies = [
     { name = "psycopg-pool" },
     { name = "pyyaml" },
     { name = "qdrant-client" },
+    { name = "setuptools" },
     { name = "uuid6" },
 ]
 
@@ -985,6 +986,7 @@ requires-dist = [
     { name = "psycopg-pool", specifier = ">=3.3.1" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "qdrant-client", specifier = "<2" },
+    { name = "setuptools", specifier = ">=83.0.0" },
     { name = "torch", marker = "extra == 'build'", specifier = ">=2.13.0" },
     { name = "uuid6", specifier = ">=2025.0.1" },
 ]
