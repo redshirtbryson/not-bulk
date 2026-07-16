@@ -17,3 +17,6 @@ eval/last_run.json
 
 # Local project-scoped binaries (see CLAUDE.md "Local binaries")
 bin/
+
+# Superpowers scratch
+.superpowers/
