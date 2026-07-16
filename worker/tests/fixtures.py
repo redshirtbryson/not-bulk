@@ -40,20 +40,29 @@ def _inner_pattern(w, h, key):
     return img
 
 
-def synthetic_photo(specs, bg=(30, 90, 30), size=(1600, 1200)):
+def synthetic_photo(specs, bg=(30, 90, 30), size=(1600, 1200), bg_ramp=None):
     """Render cards onto a contrasting background.
 
     Args:
         specs: list of card_spec dicts.
         bg: BGR background color (contrasting, non-white).
         size: (height, width) of the output photo.
+        bg_ramp: optional (lo, hi) grayscale brightness pair; when set, the
+            background is a left-to-right linear illumination ramp from
+            ``lo`` to ``hi`` instead of the flat ``bg`` color. Simulates
+            uneven lighting across the photo.
 
     Returns:
         BGR uint8 photo of shape (size[0], size[1], 3).
     """
     h_img, w_img = size
     photo = np.zeros((h_img, w_img, 3), dtype=np.uint8)
-    photo[:] = np.array(bg, dtype=np.uint8)
+    if bg_ramp is not None:
+        lo, hi = bg_ramp
+        ramp = np.linspace(lo, hi, w_img).astype(np.uint8)
+        photo[:] = ramp[None, :, None]
+    else:
+        photo[:] = np.array(bg, dtype=np.uint8)
     for s in specs:
         w, h = int(s["w"]), int(s["h"])
         card = np.full((h, w, 3), 255, dtype=np.uint8)          # white border

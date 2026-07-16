@@ -1,6 +1,3 @@
-import numpy as np
-import pytest
-
 from notbulk.detect import detect_cards
 from tests.fixtures import synthetic_photo, card_spec
 
@@ -77,3 +74,18 @@ def test_rotated_card_detected():
     dets = detect_cards(photo, CFG)
     assert len(dets) == 1
     assert dets[0].crop.shape == (1024, 734, 3)
+
+
+def test_gradient_background_grid_all_detected():
+    # Uneven lighting: background brightness ramps 40 -> 160 left-to-right.
+    # A global (Otsu-only) threshold merges bright background with the cards
+    # and drops detections; the adaptive-INV pass must recover them all.
+    specs = []
+    for row in range(3):
+        for col in range(3):
+            specs.append(card_spec(250 + col * 400, 250 + row * 450,
+                                   CARD_W, CARD_H, inner="checker"))
+    photo = synthetic_photo(specs, size=(1600, 1400), bg_ramp=(40, 160))
+    dets = detect_cards(photo, CFG)
+    assert len(dets) == 9
+    assert sorted(d.crop_index for d in dets) == list(range(9))
