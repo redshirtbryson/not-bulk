@@ -269,7 +269,7 @@ Eval manifest schema (`ground-truth/manifest.json`):
 2. **`HashMatch.margin` is computed on the full-hash tier only** (distance gap to the second-best distinct card's full hash). Per-type second-best distances may be computed but are not consumed by any gate.
 3. **`HashIndex` implements `__len__`** (total loaded entries). The CLI (Task 15) and eval harness (Task 16) detect an unbuilt index via `len(index) == 0` and exit with the build-script hint.
 4. **Package layout:** flat `worker/notbulk/` per the contract wins over uv's `src/` default; Task 1's flatten step (hatch `packages` entry) stands.
-5. **Local Postgres credentials** are `notbulk`/`notbulk`, database `notbulk` (compose). The BWS dev secret `DATABASE_URL` must be authored as `postgres://notbulk:notbulk@127.0.0.1:5432/notbulk?sslmode=disable`. Owner setup step, one time.
+5. **Local Postgres credentials** are `notbulk`/`notbulk`, database `notbulk` (compose), host port **5434** (5432 = native host PostgreSQL, 5433 = another project's container — discovered at Task 1). The BWS dev secret `DATABASE_URL` must be authored as `postgres://notbulk:notbulk@127.0.0.1:5434/notbulk?sslmode=disable`. Owner setup step, one time. Any task text citing port 5432 for the local DSN is superseded by this resolution.
 6. **`card_refs.finishes` is the tcgplayer price-key vocabulary verbatim** (`normal`, `holofoil`, `reverseHolofoil`, ...) — spec §5 uses exactly these keys for pricing, so no normalization layer exists between download and finish handling.
 7. **dbmate pinned at v2.24.2**, binary at `./bin/dbmate`, `bin/` gitignored.
 8. **numpy popcount:** runtime branch (`np.bitwise_count` when available, else 16-bit lookup table) stands; no numpy version floor is pinned.
