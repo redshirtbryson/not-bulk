@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.scripts]
-notbulk = "notbulk:main"
+notbulk-scan = "notbulk.cli:main"
 
 [project.optional-dependencies]
 build = [
