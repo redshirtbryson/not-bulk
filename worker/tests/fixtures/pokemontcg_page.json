@@ -1,0 +1,26 @@
+{
+  "data": [
+    {
+      "id": "sv4-123",
+      "name": "Charizard ex",
+      "number": "123",
+      "rarity": "Double Rare",
+      "images": { "small": "https://images.pokemontcg.io/sv4/123.png",
+                  "large": "https://images.pokemontcg.io/sv4/123_hires.png" },
+      "set": { "id": "sv4", "name": "Paradox Rift", "printedTotal": 182 },
+      "tcgplayer": { "prices": { "normal": {"market": 1.2}, "holofoil": {"market": 9.5} } }
+    },
+    {
+      "id": "sv4-5",
+      "name": "Pikachu",
+      "number": "5",
+      "images": { "small": "https://images.pokemontcg.io/sv4/5.png",
+                  "large": "https://images.pokemontcg.io/sv4/5_hires.png" },
+      "set": { "id": "sv4", "name": "Paradox Rift", "printedTotal": 182 }
+    }
+  ],
+  "page": 1,
+  "pageSize": 250,
+  "count": 2,
+  "totalCount": 2
+}
