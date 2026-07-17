@@ -103,6 +103,40 @@ worker itself in `beforeAll`):
 `DATABASE_URL` is exported inline in these commands, never written to a file. The test
 self-cleans (deletes its seeded rows and MinIO objects in `afterAll`).
 
+### M3 pricing + collection explorer
+
+Pricing flows automatically: the identify handler enqueues one `price` job per finish of the
+resolved card; the worker's `price` handler fetches from pokemontcg.io (keyless works at low
+volume; `POKEMONTCG_API_KEY` raises the limit), caches into `prices` as integer cents (NULL =
+cached known-miss, never `$0`), and then runs the finish-spread narrowing. The web layer only
+READS the cache:
+
+- `GET /collection` — the explorer grid (sort/filter/stats), owner-scoped.
+- `GET /collection/export.csv` — streamed RFC-4180 CSV, one row per `auto`/`validated`/`corrected` card.
+- `GET /img/ref/:cardRefId` — reference-art proxy; caches `images.pokemontcg.io` art into MinIO
+  once, then 302s to a signed MinIO URL (CSP stays `self`+MinIO).
+
+**Test-only seam:** `NOTBULK_STUB_PRICE=1` makes the worker's `price` handler return a canned
+`1234c` / `pokemontcg` price instead of hitting pokemontcg.io (mirrors `NOTBULK_STUB_IDENTIFY`).
+Inert when unset; never set in production. Used by the M3 E2E spec below.
+
+### M3 end-to-end pricing test
+
+`web/tests/e2e/pricing.e2e.test.ts` drives identify -> price -> finish-narrow -> explorer/CSV
+against real local Postgres + MinIO with a real worker subprocess (both stub seams:
+`NOTBULK_STUB_IDENTIFY=1` + `NOTBULK_STUB_PRICE=1`). Gated on `E2E=1`, skipped otherwise.
+Single-command form (the test spawns the worker itself in `beforeAll` and pre-seeds the MinIO
+ref object so `/img/ref` needs no network fetch):
+
+    docker compose up -d
+    DATABASE_URL='postgres://notbulk:notbulk@127.0.0.1:5434/notbulk?sslmode=disable' \
+      DBMATE_MIGRATIONS_DIR=./migrations ./bin/dbmate up
+    cd web && E2E=1 DEV_BYPASS_TURNSTILE=1 \
+      DATABASE_URL='postgres://notbulk:notbulk@127.0.0.1:5434/notbulk?sslmode=disable' \
+      pnpm vitest run tests/e2e/pricing.e2e.test.ts
+
+The test self-cleans (deletes its seeded rows, prices, and MinIO objects in `afterAll`).
+
 ## Conventions
 - Conventional commits: `feat(area):`, `fix(area):`, `docs(area):`, `chore:`. Version is not in
   the commit subject.
