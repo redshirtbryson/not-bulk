@@ -34,6 +34,7 @@ export interface Config {
   fetcher: { allowed_hosts: string[]; max_bytes: number; timeout_seconds: number };
   hash: { user_validated_cap_per_card: number };
   turnstile: { site_key: string; secret: string };
+  refproxy: { allowed_image_host: string; cache_prefix: string; max_bytes: number };
 }
 
 function findConfigPath(): string {

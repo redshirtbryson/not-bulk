@@ -69,6 +69,7 @@ export const testCfg = {
     max_bytes: 15728640, timeout_seconds: 20,
   },
   turnstile: { site_key: "test-site-key", secret: "test-secret" },
+  refproxy: { allowed_image_host: "images.pokemontcg.io", cache_prefix: "refs", max_bytes: 5242880 },
 } as unknown as Config;
 
 /** The test cookie name; the default test sessionMiddleware decodes `req.user` from it. */

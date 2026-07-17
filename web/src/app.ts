@@ -79,7 +79,7 @@ export function createApp(deps: AppDeps): Express {
 
   const storage = deps.storage ?? new Storage(cfg);
   app.use("/img", requireUser());
-  app.use(imagesRouter(pool, storage));
+  app.use(imagesRouter(pool, storage, cfg));
 
   app.use(
     "/batches",
