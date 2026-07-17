@@ -21,6 +21,7 @@ import traceback
 
 from psycopg_pool import ConnectionPool
 
+from . import discord
 from . import jobqueue
 from .cli import resolve_config_path
 from .config import load_config
@@ -76,8 +77,20 @@ def _process_one(pool, storage, cfg, handlers, worker_id: str) -> bool:
         # last attempt (or dead=True), else 'queued'. Only a truly-failed
         # identify job marks its card unreadable (Interface Contract).
         terminal = jobqueue.fail(pool, job_id, str(exc), dead=dead)
-        if job_type == "identify" and terminal == "failed":
-            _mark_card_unreadable(pool, payload.get("card_id"), str(exc))
+        if terminal == "failed":
+            # Sanitized error notify (design S10): error CLASS + ids only — never
+            # str(exc) / a traceback (which can carry interpolated user content).
+            discord.notify(
+                cfg, "error", "pipeline job failed",
+                {
+                    "type": job_type,
+                    "job_id": job_id,
+                    "batch_id": str(payload.get("batch_id") or "n/a"),
+                    "error_class": exc.__class__.__name__,
+                },
+            )
+            if job_type == "identify":
+                _mark_card_unreadable(pool, payload.get("card_id"), str(exc))
     return True
 
 

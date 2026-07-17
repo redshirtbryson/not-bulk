@@ -274,3 +274,33 @@ def test_nonexistent_card_id_is_a_clean_noop(monkeypatch):
     ih.handle_identify(pool, FakeStorage(), {"card_id": "ghost-card"}, CFG)
     # Only the initial card/photo/batch SELECT should have run.
     assert len(pool.cursor.executed) == 1
+
+
+def test_batch_complete_emits_info_notify_once(monkeypatch):
+    """When the guarded batch-completion UPDATE transitions the batch (fires),
+    the identify handler emits ONE info Discord notify; a non-firing run emits
+    none. discord.notify itself no-ops under the disabled test config."""
+    from notbulk.handlers import identify as identify_handler
+
+    spy: list[tuple] = []
+    monkeypatch.setattr(identify_handler.discord, "notify",
+                        lambda cfg, level, title, fields: spy.append((level, title, fields)))
+
+    # Firing run: _COMPLETE_BATCH_SQL RETURNS a row -> fired True.
+    identify_handler._notify_batch_complete(
+        cfg={"discord": {"enabled": False, "timeout_seconds": 5}},
+        batch_id="batch-7", fired=True,
+    )
+    assert len(spy) == 1
+    level, title, fields = spy[0]
+    assert level == "info"
+    assert title == "batch complete"
+    assert fields["batch_id"] == "batch-7"
+
+    # Non-firing run (a racing worker saw 0 rows) -> no notify.
+    spy.clear()
+    identify_handler._notify_batch_complete(
+        cfg={"discord": {"enabled": False, "timeout_seconds": 5}},
+        batch_id="batch-7", fired=False,
+    )
+    assert spy == []

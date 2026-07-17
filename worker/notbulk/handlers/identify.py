@@ -30,6 +30,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from .. import discord
 from .. import jobqueue
 from ..cascade import CascadeDeps, identify_crop
 from ..cli import resolve_config_path
@@ -124,6 +125,17 @@ def _status_for_stage(stage: str) -> str:
     if stage == "validation":
         return "validation"
     return "unreadable"
+
+
+def _notify_batch_complete(cfg: dict, batch_id: str, fired: bool) -> None:
+    """Emit ONE info Discord notify when the batch actually transitioned.
+
+    Pure additive: discord.notify no-ops when discord.enabled is false, so this
+    is inert in tests and in any deployment without a provisioned webhook.
+    """
+    if not fired:
+        return
+    discord.notify(cfg, "info", "batch complete", {"batch_id": str(batch_id)})
 
 
 def handle_identify(pool, storage, payload: dict, cfg: dict) -> None:
@@ -224,3 +236,4 @@ def handle_identify(pool, storage, payload: dict, cfg: dict) -> None:
         conn.commit()
     if fired:
         jobqueue.notify_progress(pool, batch_id, "batch_complete")
+    _notify_batch_complete(cfg, batch_id, fired)
