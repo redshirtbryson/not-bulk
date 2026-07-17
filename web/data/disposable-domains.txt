@@ -1,0 +1,34 @@
+# Disposable / throwaway email domains — seed list for signup abuse prevention.
+# Refresh source: https://github.com/disposable-email-domains/disposable-email-domains
+# (public-domain list; periodically re-sync this file from that project).
+# One domain per line, lowercase, no leading dot. Blank lines and # comments ignored.
+mailinator.com
+guerrillamail.com
+10minutemail.com
+tempmail.com
+throwaway.email
+trashmail.com
+yopmail.com
+getnada.com
+mailnesia.com
+dispostable.com
+maildrop.cc
+fakeinbox.com
+sharklasers.com
+guerrillamailblock.com
+grr.la
+spam4.me
+temp-mail.org
+mohmal.com
+emailondeck.com
+mailcatch.com
+mytemp.email
+tempinbox.com
+33mail.com
+tempr.email
+mailtemp.net
+inboxbear.com
+burnermail.io
+moakt.com
+luxusmail.org
+harakirimail.com
