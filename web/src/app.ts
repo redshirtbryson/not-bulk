@@ -1,5 +1,6 @@
 import express, { type Express, type RequestHandler } from "express";
-import type { Pool, Client } from "pg";
+import type { Pool } from "pg";
+import { Client } from "pg";
 import nunjucks from "nunjucks";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +14,8 @@ import { notFound, errorHandler } from "./middleware/errors.js";
 import { requireUser } from "./middleware/session.js";
 import { imagesRouter } from "./routes/images.js";
 import { batchesRouter } from "./routes/batches.js";
+import { progressRouter } from "./routes/progress.js";
+import type { PgLikeClient } from "./services/progressbus.js";
 
 const here = dirname(fileURLToPath(import.meta.url)); // .../web/src
 const webRoot = dirname(here); // .../web
@@ -25,7 +28,7 @@ export interface AppDeps {
   gateImage?: typeof gateImage;
   verifyTurnstile?: typeof verifyTurnstile;
   sessionMiddleware?: RequestHandler;
-  listenClientFactory?: () => Client; // pg.Client, imported type-only above
+  listenClientFactory?: () => Promise<PgLikeClient>;
 }
 
 export function createApp(deps: AppDeps): Express {
@@ -70,6 +73,19 @@ export function createApp(deps: AppDeps): Express {
       verifyTurnstile: deps.verifyTurnstile,
     }),
   );
+
+  // Dedicated LISTEN client factory: a raw pg Client (NOT from the pool — LISTEN holds
+  // it open for the process lifetime). progressRouter applies its own requireUser() per
+  // route since GET /batches/:id/events must return 401/redirect before any SSE headers
+  // are written.
+  const listenFactory: () => Promise<PgLikeClient> =
+    deps.listenClientFactory ??
+    (async () => {
+      const c = new Client({ connectionString: process.env.DATABASE_URL });
+      await c.connect();
+      return c as unknown as PgLikeClient;
+    });
+  app.use(progressRouter(pool, cfg, listenFactory));
 
   app.use(notFound());
   app.use(errorHandler());

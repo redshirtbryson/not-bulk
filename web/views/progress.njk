@@ -1,0 +1,23 @@
+{% extends "layout.njk" %}
+{% block content %}
+<section class="progress" data-batch-id="{{ batch.id }}">
+  <h1>Processing batch</h1>
+  <div class="counts-bar">
+    <span>Photos done: <b id="photos-done">{{ snap.photos_done }}</b> / {{ snap.batch.photo_count }}</span>
+    <span>Cards found: <b id="cards-total">{{ snap.cards_total }}</b></span>
+    <span>Identified: <b id="cards-identified">{{ snap.cards_identified }}</b></span>
+    <span>Needs review: <b id="cards-validation">{{ snap.cards_validation }}</b></span>
+    <span>Unreadable: <b id="cards-unreadable">{{ snap.cards_unreadable }}</b></span>
+  </div>
+  <a id="validate-link" href="/batches/{{ batch.id }}/validate"
+     style="{% if snap.cards_validation < 1 %}display:none{% endif %}">Review {{ snap.cards_validation }} card(s) &rarr;</a>
+  <a id="results-link" href="/batches/{{ batch.id }}/results"
+     style="{% if snap.batch.status != 'complete' %}display:none{% endif %}">View results &rarr;</a>
+  <ul id="ticker" class="ticker">
+    {% for t in snap.ticker %}
+      <li data-card-id="{{ t.card_id }}">{{ t.name or 'unknown' }} — {{ t.confidence }}% ({{ t.status }})</li>
+    {% endfor %}
+  </ul>
+</section>
+<script src="/js/progress.js" defer></script>
+{% endblock %}
