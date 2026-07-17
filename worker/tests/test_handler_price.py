@@ -86,3 +86,29 @@ def test_missing_payload_key_raises_value_error(monkeypatch):
     _wire(monkeypatch, spy, fresh=False, resolve_result=(1234, "pokemontcg"))
     with pytest.raises(ValueError):
         ph.handle_price(pool=object(), storage=object(), payload={"card_ref_id": "sv4-123"}, cfg=CFG)
+
+
+def test_stub_price_seam_upserts_canned_without_resolving(monkeypatch):
+    """NOTBULK_STUB_PRICE=1: handle_price upserts (1234,'pokemontcg') for the
+    payload finish WITHOUT calling resolve_price (the network path). Inert-when-
+    unset behavior is covered by the non-stub tests in this file."""
+    monkeypatch.setenv("NOTBULK_STUB_PRICE", "1")
+
+    def _boom(*a, **kw):
+        raise AssertionError("resolve_price must NOT be called under NOTBULK_STUB_PRICE")
+
+    monkeypatch.setattr(ph, "resolve_price", _boom)
+    # No-op the downstream narrow so this test isolates the price upsert.
+    monkeypatch.setattr(ph.finish, "maybe_narrow_finish_flag", lambda pool, cid, cfg: None)
+
+    upserts = []
+    monkeypatch.setattr(
+        ph.cache, "upsert_price",
+        lambda pool, cid, fin, cents, src: upserts.append((cid, fin, cents, src)),
+    )
+    # read_cached returns (fresh=False, None) so the resolve/upsert path runs.
+    monkeypatch.setattr(ph.cache, "read_cached", lambda pool, cid, fin, ttl: (False, None))
+
+    ph.handle_price(pool=object(), storage=object(), payload=PAYLOAD, cfg=CFG)
+
+    assert upserts == [("sv4-123", "holofoil", 1234, "pokemontcg")]

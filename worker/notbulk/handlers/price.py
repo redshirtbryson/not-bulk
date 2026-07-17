@@ -13,6 +13,8 @@ Money is integer cents throughout (plan Global Constraints).
 """
 from __future__ import annotations
 
+import os
+
 from .. import jobqueue
 from ..pricing import cache
 from ..pricing.sources import (CollectrPriceSource, PokemonTcgPriceSource,
@@ -44,11 +46,18 @@ def handle_price(pool, storage, payload: dict, cfg: dict) -> None:
         # A fresh row (real price OR a fresh NULL known-miss) needs no refetch.
         return
 
-    # resolve_price raises SourceUnavailable if every source skips — let it
-    # propagate so the queue retries the job (do NOT cache a transient failure).
-    price_cents, source_name = resolve_price(
-        _build_sources(cfg), card_ref_id, finish_key, cfg
-    )
+    # Test-only seam: deterministic offline pricing for the M3 E2E loop.
+    # When NOTBULK_STUB_PRICE is set, skip the network resolve and use a canned
+    # price so the queue/cache/narrow/explorer path can be exercised without
+    # hitting pokemontcg.io. Never set in production. (Mirrors NOTBULK_STUB_IDENTIFY.)
+    if os.environ.get("NOTBULK_STUB_PRICE") == "1":
+        price_cents, source_name = 1234, "pokemontcg"
+    else:
+        # resolve_price raises SourceUnavailable if every source skips — let it
+        # propagate so the queue retries the job (do NOT cache a transient failure).
+        price_cents, source_name = resolve_price(
+            _build_sources(cfg), card_ref_id, finish_key, cfg
+        )
     # A genuine miss (price_cents is None) is cached as a known-miss so we don't
     # re-hit the API within the TTL.
     cache.upsert_price(pool, card_ref_id, finish_key, price_cents, source_name)

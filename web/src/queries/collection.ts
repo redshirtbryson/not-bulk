@@ -93,7 +93,12 @@ export async function getCollection(
     ` ORDER BY ${orderBy} LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
 
   const { rows } = await pool.query(sql, params);
-  return rows as CollectionRow[];
+  return rows.map((row) => ({
+    ...row,
+    price_fetched_at: row.price_fetched_at instanceof Date
+      ? row.price_fetched_at.toISOString()
+      : row.price_fetched_at,
+  })) as CollectionRow[];
 }
 
 export async function getCollectionStats(
@@ -121,7 +126,9 @@ export async function getCollectionStats(
     total_cards: Number(row.total_cards ?? 0),
     total_value_cents: Number(row.total_value_cents ?? 0),
     priced_fraction: Number(row.priced_fraction ?? 0),
-    oldest_price_at: row.oldest_price_at ?? null,
+    oldest_price_at: row.oldest_price_at instanceof Date
+      ? row.oldest_price_at.toISOString()
+      : (row.oldest_price_at ?? null),
   };
 }
 
@@ -148,5 +155,10 @@ export async function getCollectionForExport(
     where +
     ` ORDER BY r.set_name, r.number`;
   const { rows } = await pool.query(sql, params);
-  return rows as CollectionRow[];
+  return rows.map((row) => ({
+    ...row,
+    price_fetched_at: row.price_fetched_at instanceof Date
+      ? row.price_fetched_at.toISOString()
+      : row.price_fetched_at,
+  })) as CollectionRow[];
 }
