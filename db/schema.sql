@@ -1,4 +1,4 @@
-\restrict SVhDSDT251sDrw3krxVN5jUaQMgp1uDlvbf5QIwvrAbefRUJyR6dbv4ejKeMosl
+\restrict PzmxiYfzaXh8M3ZQECL5wxOX0stRFDiczX3KJhTI9RSoVOt8ZjH2cOGc6ug5oTX
 
 -- Dumped from database version 16.14 (Debian 16.14-1.pgdg13+1)
 -- Dumped by pg_dump version 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1)
@@ -50,7 +50,8 @@ CREATE TABLE public.card_refs (
     rarity text,
     image_url text NOT NULL,
     finishes text[] DEFAULT '{}'::text[] NOT NULL,
-    synced_at timestamp with time zone DEFAULT now() NOT NULL
+    synced_at timestamp with time zone DEFAULT now() NOT NULL,
+    ref_cached_key text
 );
 
 
@@ -120,7 +121,7 @@ CREATE TABLE public.jobs (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT jobs_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'running'::text, 'done'::text, 'failed'::text]))),
-    CONSTRAINT jobs_type_check CHECK ((type = ANY (ARRAY['detect'::text, 'identify'::text, 'fetch_source'::text, 'ingest_correction'::text])))
+    CONSTRAINT jobs_type_check CHECK ((type = ANY (ARRAY['detect'::text, 'identify'::text, 'fetch_source'::text, 'ingest_correction'::text, 'price'::text])))
 );
 
 
@@ -165,6 +166,19 @@ CREATE TABLE public.photos (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT photos_source_type_check CHECK ((source_type = ANY (ARRAY['upload'::text, 'imgur'::text, 'reddit'::text]))),
     CONSTRAINT photos_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'fetching'::text, 'stored'::text, 'detecting'::text, 'done'::text, 'failed'::text])))
+);
+
+
+--
+-- Name: prices; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.prices (
+    card_ref_id text NOT NULL,
+    finish text NOT NULL,
+    price_cents integer,
+    source text NOT NULL,
+    fetched_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -321,6 +335,14 @@ ALTER TABLE ONLY public.magic_links
 
 ALTER TABLE ONLY public.photos
     ADD CONSTRAINT photos_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: prices prices_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.prices
+    ADD CONSTRAINT prices_pkey PRIMARY KEY (card_ref_id, finish);
 
 
 --
@@ -507,6 +529,14 @@ ALTER TABLE ONLY public.photos
 
 
 --
+-- Name: prices prices_card_ref_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.prices
+    ADD CONSTRAINT prices_card_ref_id_fkey FOREIGN KEY (card_ref_id) REFERENCES public.card_refs(id) ON DELETE CASCADE;
+
+
+--
 -- Name: ref_hashes ref_hashes_card_ref_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -534,7 +564,7 @@ ALTER TABLE ONLY public.usage
 -- PostgreSQL database dump complete
 --
 
-\unrestrict SVhDSDT251sDrw3krxVN5jUaQMgp1uDlvbf5QIwvrAbefRUJyR6dbv4ejKeMosl
+\unrestrict PzmxiYfzaXh8M3ZQECL5wxOX0stRFDiczX3KJhTI9RSoVOt8ZjH2cOGc6ug5oTX
 
 
 --
@@ -543,4 +573,5 @@ ALTER TABLE ONLY public.usage
 
 INSERT INTO public.schema_migrations (version) VALUES
     ('001'),
-    ('002');
+    ('002'),
+    ('003');

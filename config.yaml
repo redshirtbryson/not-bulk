@@ -51,3 +51,15 @@ fetcher:
   max_bytes: 15728640
   timeout_seconds: 20
 turnstile: { site_key: "1x00000000000000000000AA", secret: "1x0000000000000000000000000000000AA" }  # Cloudflare official test keys — always-pass; real keys via BWS at M5
+pricing:
+  source_order: ["pokemontcg"]          # 'collectr' prepended here once COLLECTR_API_KEY is provisioned
+  cache_ttl_hours: 24
+  finish_spread_flag_pct: 15            # >15% price spread across finishes keeps finish_needs_confirmation
+  pokemontcg_base: "https://api.pokemontcg.io/v2"
+explorer:
+  page_size: 60
+  default_sort: "value_desc"            # value_desc | name_asc | set_asc
+refproxy:
+  allowed_image_host: "images.pokemontcg.io"
+  cache_prefix: "refs"                  # MinIO key prefix: refs/{card_ref_id}.webp
+  max_bytes: 5242880                    # 5 MB cap on a reference-image fetch
