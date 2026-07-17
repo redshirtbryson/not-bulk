@@ -12,6 +12,7 @@ import { csp } from "./middleware/csp.js";
 import { notFound, errorHandler } from "./middleware/errors.js";
 import { requireUser } from "./middleware/session.js";
 import { imagesRouter } from "./routes/images.js";
+import { batchesRouter } from "./routes/batches.js";
 
 const here = dirname(fileURLToPath(import.meta.url)); // .../web/src
 const webRoot = dirname(here); // .../web
@@ -57,6 +58,18 @@ export function createApp(deps: AppDeps): Express {
   const storage = deps.storage ?? new Storage(cfg);
   app.use("/img", requireUser());
   app.use(imagesRouter(pool, storage));
+
+  app.use(
+    "/batches",
+    requireUser(),
+    batchesRouter({
+      pool,
+      cfg,
+      storage,
+      gateImage: deps.gateImage,
+      verifyTurnstile: deps.verifyTurnstile,
+    }),
+  );
 
   app.use(notFound());
   app.use(errorHandler());

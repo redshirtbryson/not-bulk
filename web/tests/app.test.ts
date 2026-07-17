@@ -13,6 +13,11 @@ const cfg = {
     secret_key: "minioadmin",
     signed_url_ttl_seconds: 900,
   },
+  quotas: {
+    batches_per_day: 5, photos_per_day: 50, cards_per_day: 600, fetches_per_day: 20,
+    photos_per_batch: 10, anon_photos_per_batch: 3,
+    max_photo_bytes: 10485760, max_pixels: 50000000, max_cards_per_photo: 30,
+  },
 } as unknown as Config;
 
 function fakePool(queryImpl: (sql: string) => Promise<unknown>): Pool {

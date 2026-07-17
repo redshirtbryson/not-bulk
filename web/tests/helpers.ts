@@ -59,6 +59,11 @@ export const testCfg = {
     session_absolute_days: 30, session_idle_days: 7, magic_link_expiry_minutes: 15,
     magic_links_per_email_hour: 3, magic_links_per_email_day: 10,
   },
+  quotas: {
+    batches_per_day: 5, photos_per_day: 50, cards_per_day: 600, fetches_per_day: 20,
+    photos_per_batch: 10, anon_photos_per_batch: 3,
+    max_photo_bytes: 10485760, max_pixels: 50000000, max_cards_per_photo: 30,
+  },
 } as unknown as Config;
 
 /** The test cookie name; the default test sessionMiddleware decodes `req.user` from it. */
