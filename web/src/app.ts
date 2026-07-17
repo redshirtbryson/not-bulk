@@ -5,11 +5,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Config } from "./config.js";
 import type { Mailer } from "./services/mailer.js";
-import type { Storage } from "./services/storage.js";
+import { Storage } from "./services/storage.js";
 import type { gateImage } from "./services/imagegate.js";
 import type { verifyTurnstile } from "./services/turnstile.js";
 import { csp } from "./middleware/csp.js";
 import { notFound, errorHandler } from "./middleware/errors.js";
+import { requireUser } from "./middleware/session.js";
+import { imagesRouter } from "./routes/images.js";
 
 const here = dirname(fileURLToPath(import.meta.url)); // .../web/src
 const webRoot = dirname(here); // .../web
@@ -50,10 +52,14 @@ export function createApp(deps: AppDeps): Express {
     }
   });
 
+  if (deps.sessionMiddleware) app.use(deps.sessionMiddleware);
+
+  const storage = deps.storage ?? new Storage(cfg);
+  app.use("/img", requireUser());
+  app.use(imagesRouter(pool, storage));
+
   app.use(notFound());
   app.use(errorHandler());
 
-  // cfg is threaded to route modules in later tasks; kept in scope here.
-  void cfg;
   return app;
 }

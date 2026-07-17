@@ -4,7 +4,16 @@ import type { Pool } from "pg";
 import { createApp } from "../src/app.js";
 import type { Config } from "../src/config.js";
 
-const cfg = { web: { port: 3000, base_url: "http://127.0.0.1:3000", secure_cookies: false } } as unknown as Config;
+const cfg = {
+  web: { port: 3000, base_url: "http://127.0.0.1:3000", secure_cookies: false },
+  storage: {
+    endpoint: "http://127.0.0.1:9000",
+    bucket: "notbulk",
+    access_key: "minioadmin",
+    secret_key: "minioadmin",
+    signed_url_ttl_seconds: 900,
+  },
+} as unknown as Config;
 
 function fakePool(queryImpl: (sql: string) => Promise<unknown>): Pool {
   return { query: (sql: string) => queryImpl(sql) } as unknown as Pool;
