@@ -27,6 +27,7 @@ from .config import load_config
 from .handlers import detect as detect_handler
 from .handlers import fetch as fetch_handler
 from .handlers import identify as identify_handler
+from .handlers import price as price_handler
 from .handlers.correction import handle_ingest_correction
 from .storage import Storage
 
@@ -40,6 +41,7 @@ def _build_handlers():
         "identify": identify_handler.handle_identify,
         "fetch_source": fetch_handler.handle_fetch,
         "ingest_correction": handle_ingest_correction,
+        "price": price_handler.handle_price,
     }
 
 

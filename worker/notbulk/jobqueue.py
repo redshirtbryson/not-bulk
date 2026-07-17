@@ -20,6 +20,7 @@ _REQUIRED_KEYS: dict[str, set[str]] = {
     "identify": {"card_id"},
     "fetch_source": {"photo_id"},
     "ingest_correction": {"card_id", "actual_ref_id", "predicted_ref_id"},
+    "price": {"card_ref_id", "finish"},
 }
 
 _BACKOFF_STEP_SECONDS = 30
