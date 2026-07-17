@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>NotBulk — Collection Export</title>
+  <style>
+    @page {
+      size: Letter;
+      margin: 14mm 12mm 22mm 12mm;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #16181d;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* Fixed footer painted on every printed page (Chrome print). */
+    .pdf-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      font-size: 8px;
+      line-height: 1.35;
+      color: #565b66;
+      border-top: 1px solid #d7dae0;
+      padding: 4px 0 0 0;
+    }
+    .pdf-footer__meta { display: flex; justify-content: space-between; margin-bottom: 2px; }
+    .pdf-footer__disclaimer { max-width: 100%; }
+
+    /* Cover section. */
+    .pdf-cover {
+      text-align: center;
+      padding: 40mm 0 18mm 0;
+      page-break-after: always;
+    }
+    .pdf-cover__wordmark { font-size: 40px; font-weight: 800; letter-spacing: -0.5px; }
+    .pdf-cover__title { font-size: 20px; font-weight: 600; color: #444a55; margin-top: 6px; }
+    .pdf-cover__stats { margin-top: 26px; font-size: 13px; line-height: 1.9; color: #23272f; }
+    .pdf-cover__stats strong { font-weight: 700; }
+
+    /* Card grid. */
+    .pdf-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .pdf-card {
+      page-break-inside: avoid;
+      break-inside: avoid;
+      border: 1px solid #d7dae0;
+      border-radius: 6px;
+      padding: 6px;
+      font-size: 9px;
+      line-height: 1.35;
+    }
+    .pdf-card__img,
+    .pdf-card__placeholder {
+      width: 100%;
+      height: 120px;
+      object-fit: contain;
+      border-radius: 4px;
+      background: #f1f3f6;
+      display: block;
+    }
+    .pdf-card__placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #8a909b;
+      font-size: 8px;
+    }
+    .pdf-card__name { font-weight: 700; margin-top: 5px; font-size: 10px; }
+    .pdf-card__meta { color: #565b66; }
+    .pdf-card__price { font-weight: 700; margin-top: 3px; }
+  </style>
+</head>
+<body>
+  <!-- Footer element is fixed → Chrome repeats it on each page. -->
+  <div class="pdf-footer">
+    <div class="pdf-footer__meta">
+      <span>Generated {{ stats.generatedAt }}</span>
+      <span>Total value {{ stats.totalValueDisplay }}</span>
+    </div>
+    <div class="pdf-footer__disclaimer">NotBulk is an unofficial fan tool. Not affiliated with, endorsed, or sponsored by Nintendo, Creatures Inc., GAME FREAK Inc., or The Pokémon Company.</div>
+  </div>
+
+  <section class="pdf-cover">
+    <div class="pdf-cover__wordmark">NotBulk</div>
+    <div class="pdf-cover__title">Collection Export</div>
+    <div class="pdf-cover__stats">
+      <div>Total cards: <strong>{{ stats.totalCards }}</strong></div>
+      <div>Total value: <strong>{{ stats.totalValueDisplay }}</strong></div>
+      <div>Generated: <strong>{{ stats.generatedAt }}</strong></div>
+    </div>
+  </section>
+
+  <main class="pdf-grid">
+    {% for card in cards %}
+    <div class="pdf-card">
+      {% if card.cropDataUri %}
+      <img class="pdf-card__img" src="{{ card.cropDataUri }}" alt="">
+      {% else %}
+      <div class="pdf-card__placeholder">no image</div>
+      {% endif %}
+      <div class="pdf-card__name">{{ card.name }}</div>
+      <div class="pdf-card__meta">{{ card.set }} · {{ card.number }}</div>
+      <div class="pdf-card__meta">{{ card.finish }} · qty {{ card.quantity }}</div>
+      <div class="pdf-card__price">{{ card.priceDisplay }}</div>
+    </div>
+    {% endfor %}
+  </main>
+</body>
+</html>
