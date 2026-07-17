@@ -1,0 +1,13 @@
+{% extends "layout.njk" %}
+{% block content %}
+<section class="validate" data-batch-id="{{ batch.id }}">
+  <h1>Review cards</h1>
+  {% if not card %}
+    <p>Nothing left to review.</p>
+    <a href="/batches/{{ batch.id }}/results">View results &rarr;</a>
+  {% else %}
+    {% include "partials/validate-card.njk" %}
+  {% endif %}
+</section>
+<script src="/js/validate.js" defer></script>
+{% endblock %}

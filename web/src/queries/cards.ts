@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 export interface CardRow {
   id: string;
   photo_id: string;
+  batch_id: string;
   crop_index: number;
   crop_storage_key: string | null;
   card_ref_id: string | null;
@@ -15,13 +16,14 @@ export interface CardRow {
 }
 
 // Contract helper: owned-card lookup via card→photo→batch join (batches.user_id filter).
+// Surfaces batch_id (from the photos join) so callers can redirect/enqueue without a second query.
 export async function getOwnedCard(
   pool: Pool,
   userId: string,
   cardId: string,
 ): Promise<CardRow | null> {
   const { rows } = await pool.query(
-    `SELECT c.id, c.photo_id, c.crop_index, c.crop_storage_key, c.card_ref_id,
+    `SELECT c.id, c.photo_id, p.batch_id, c.crop_index, c.crop_storage_key, c.card_ref_id,
             c.finish, c.finish_needs_confirmation, c.quantity, c.confidence,
             c.status, c.candidates
        FROM cards c

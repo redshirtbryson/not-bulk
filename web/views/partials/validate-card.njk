@@ -1,0 +1,43 @@
+<div class="validate-card" data-card-id="{{ card.id }}">
+  <img class="crop" src="/img/crop/{{ card.id }}" alt="detected card crop">
+  {# Assembly Resolution 9: reference cards shown as TEXT ONLY, no external thumbnail #}
+  <form class="validate-form" method="post" action="/cards/{{ card.id }}/validate">
+    <fieldset class="candidates">
+      <legend>Which card is this?</legend>
+      {% for opt in options %}
+        <label class="candidate">
+          <input type="radio" name="card_ref_id" value="{{ opt.id }}"
+                 {% if loop.first %}checked{% endif %} data-index="{{ loop.index }}">
+          <span>{{ opt.name }} — {{ opt.set_name }} #{{ opt.number }}</span>
+        </label>
+      {% endfor %}
+    </fieldset>
+
+    {% if card.finish_needs_confirmation %}
+      <fieldset class="finish">
+        <legend>Finish</legend>
+        <label><input type="radio" name="finish" value="non-holo" checked> Non-holo</label>
+        <label><input type="radio" name="finish" value="reverse"> Reverse</label>
+        <label><input type="radio" name="finish" value="holo"> Holo</label>
+      </fieldset>
+    {% endif %}
+
+    <div class="search">
+      <input type="text" name="q" placeholder="Search all cards…" autocomplete="off"
+             hx-get="/api/search-refs" hx-trigger="keyup changed delay:300ms"
+             hx-target="#search-results" hx-swap="innerHTML">
+      <div id="search-results"></div>
+    </div>
+
+    <div class="actions">
+      <button type="submit" name="_action" value="confirm">Confirm (Enter)</button>
+    </div>
+  </form>
+
+  <form method="post" action="/cards/{{ card.id }}/skip" class="inline">
+    <button type="submit">Skip — unreadable (s)</button>
+  </form>
+  <form method="post" action="/cards/{{ card.id }}/not-card" class="inline">
+    <button type="submit">Not a card (n)</button>
+  </form>
+</div>

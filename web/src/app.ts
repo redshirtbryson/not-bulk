@@ -15,6 +15,8 @@ import { requireUser } from "./middleware/session.js";
 import { imagesRouter } from "./routes/images.js";
 import { batchesRouter } from "./routes/batches.js";
 import { progressRouter } from "./routes/progress.js";
+import { validateRouter } from "./routes/validate.js";
+import { searchRouter } from "./routes/search.js";
 import type { PgLikeClient } from "./services/progressbus.js";
 
 const here = dirname(fileURLToPath(import.meta.url)); // .../web/src
@@ -86,6 +88,12 @@ export function createApp(deps: AppDeps): Express {
       return c as unknown as PgLikeClient;
     });
   app.use(progressRouter(pool, cfg, listenFactory));
+
+  // Mounted at the app level (no prefix) so requireUser()'s req.path sees the full
+  // path — /api/search-refs must hit the 401-JSON branch, /batches/:id/validate the
+  // 302-redirect branch (both routers apply their own requireUser() per route).
+  app.use(validateRouter(pool, cfg));
+  app.use(searchRouter(pool));
 
   app.use(notFound());
   app.use(errorHandler());

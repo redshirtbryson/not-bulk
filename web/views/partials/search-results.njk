@@ -1,0 +1,5 @@
+{% for r in results %}
+  <button type="button" class="search-hit" data-ref-id="{{ r.id }}">
+    {{ r.name }} — {{ r.set_name }} #{{ r.number }}
+  </button>
+{% endfor %}
