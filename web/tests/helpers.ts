@@ -70,6 +70,7 @@ export const testCfg = {
   },
   turnstile: { site_key: "test-site-key", secret: "test-secret" },
   refproxy: { allowed_image_host: "images.pokemontcg.io", cache_prefix: "refs", max_bytes: 5242880 },
+  explorer: { page_size: 60, default_sort: "value_desc" },
 } as unknown as Config;
 
 /** The test cookie name; the default test sessionMiddleware decodes `req.user` from it. */

@@ -35,6 +35,7 @@ export interface Config {
   hash: { user_validated_cap_per_card: number };
   turnstile: { site_key: string; secret: string };
   refproxy: { allowed_image_host: string; cache_prefix: string; max_bytes: number };
+  explorer: { page_size: number; default_sort: string };
 }
 
 function findConfigPath(): string {

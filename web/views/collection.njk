@@ -1,0 +1,93 @@
+{% extends "layout.njk" %}
+{% block title %}Collection — NotBulk{% endblock %}
+
+{% macro sortlink(key, label) %}
+  <a href="?sort={{ key }}{% if filters.batchId %}&batch={{ filters.batchId }}{% endif %}{% if filters.set %}&set={{ filters.set }}{% endif %}{% if filters.finish %}&finish={{ filters.finish }}{% endif %}{% if filters.source %}&source={{ filters.source }}{% endif %}"
+     class="sortlink{% if filters.sort == key %} active{% endif %}">{{ label }}</a>
+{% endmacro %}
+
+{% block content %}
+<section class="collection">
+  <h1>Your collection</h1>
+
+  <div class="stats-bar">
+    <span class="stat"><strong>{{ stats.total_cards }}</strong> cards</span>
+    <span class="stat"><strong>{{ stats.total_value_display }}</strong> total value</span>
+    <span class="stat"><strong>{{ (stats.priced_fraction * 100) | round(0) | int }}%</strong> priced</span>
+    <span class="stat">
+      {% if stats.oldest_price_at %}
+        prices as of {{ stats.oldest_price_at | replace("T", " ") | truncate(16, true, "") }}
+      {% else %}
+        no prices yet
+      {% endif %}
+    </span>
+  </div>
+
+  <nav class="sort-controls">
+    Sort:
+    {{ sortlink("value_desc", "Value") }}
+    {{ sortlink("name_asc", "Name") }}
+    {{ sortlink("set_asc", "Set") }}
+  </nav>
+
+  <form class="filter-controls" method="get" action="/collection">
+    <input type="hidden" name="sort" value="{{ filters.sort }}" />
+    <label>Set <input type="text" name="set" value="{{ filters.set or '' }}" placeholder="set id" /></label>
+    <label>Finish
+      <select name="finish">
+        <option value=""{% if not filters.finish %} selected{% endif %}>any</option>
+        <option value="normal"{% if filters.finish == 'normal' %} selected{% endif %}>normal</option>
+        <option value="holofoil"{% if filters.finish == 'holofoil' %} selected{% endif %}>holofoil</option>
+        <option value="reverseHolofoil"{% if filters.finish == 'reverseHolofoil' %} selected{% endif %}>reverse holo</option>
+      </select>
+    </label>
+    <label>Source
+      <select name="source">
+        <option value=""{% if not filters.source %} selected{% endif %}>all</option>
+        <option value="auto"{% if filters.source == 'auto' %} selected{% endif %}>auto-accepted</option>
+        <option value="corrected"{% if filters.source == 'corrected' %} selected{% endif %}>reviewed</option>
+      </select>
+    </label>
+    <button type="submit">Apply</button>
+    <a class="clear" href="/collection">Clear</a>
+  </form>
+
+  {% if rows.length == 0 %}
+    <p class="empty">No cards match. Scan a batch or clear your filters.</p>
+  {% else %}
+    <ul class="card-grid">
+      {% for row in rows %}
+        <li class="card-cell">
+          <img src="/img/crop/{{ row.card_id }}" alt="{{ row.name or 'card' }}" loading="lazy" />
+          <div class="card-name">{{ row.name or 'Unknown' }}</div>
+          <div class="card-set">{{ row.set_name }} &middot; {{ row.number }}</div>
+          <div class="card-finish">{{ row.finish or '—' }}</div>
+          <div class="card-price">
+            {% if not row.has_price_row %}
+              <span class="pending">{{ row.price_display }}</span>
+            {% elif row.price_cents == null %}
+              <span class="nodata">{{ row.price_display }}</span>
+            {% else %}
+              <span class="price">{{ row.price_display }}</span>
+            {% endif %}
+          </div>
+          {% if row.quantity > 1 %}<div class="card-qty">×{{ row.quantity }}</div>{% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+
+    <nav class="pager">
+      {% if page > 1 %}
+        <a href="?page={{ page - 1 }}&sort={{ filters.sort }}{% if filters.batchId %}&batch={{ filters.batchId }}{% endif %}{% if filters.set %}&set={{ filters.set }}{% endif %}{% if filters.finish %}&finish={{ filters.finish }}{% endif %}{% if filters.source %}&source={{ filters.source }}{% endif %}">&larr; Prev</a>
+      {% endif %}
+      <span class="page-n">Page {{ page }}</span>
+      {% if hasNext %}
+        <a href="?page={{ page + 1 }}&sort={{ filters.sort }}{% if filters.batchId %}&batch={{ filters.batchId }}{% endif %}{% if filters.set %}&set={{ filters.set }}{% endif %}{% if filters.finish %}&finish={{ filters.finish }}{% endif %}{% if filters.source %}&source={{ filters.source }}{% endif %}">Next &rarr;</a>
+      {% endif %}
+    </nav>
+
+    <p class="export"><a href="/collection/export.csv">Download CSV</a></p>
+  {% endif %}
+</section>
+<script src="/js/collection.js" defer></script>
+{% endblock %}
