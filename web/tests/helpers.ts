@@ -68,6 +68,7 @@ export const testCfg = {
     allowed_hosts: ["i.imgur.com", "imgur.com", "api.imgur.com", "i.redd.it", "www.reddit.com"],
     max_bytes: 15728640, timeout_seconds: 20,
   },
+  turnstile: { site_key: "test-site-key", secret: "test-secret" },
 } as unknown as Config;
 
 /** The test cookie name; the default test sessionMiddleware decodes `req.user` from it. */

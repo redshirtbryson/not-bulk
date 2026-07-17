@@ -18,6 +18,8 @@ import { batchesRouter } from "./routes/batches.js";
 import { progressRouter } from "./routes/progress.js";
 import { validateRouter } from "./routes/validate.js";
 import { searchRouter } from "./routes/search.js";
+import { landingRouter } from "./routes/landing.js";
+import { resultsRouter } from "./routes/results.js";
 import { authRoutes } from "./auth/routes.js";
 import type { PgLikeClient } from "./services/progressbus.js";
 
@@ -62,6 +64,9 @@ export function createApp(deps: AppDeps): Express {
 
   if (deps.sessionMiddleware) app.use(deps.sessionMiddleware);
 
+  // Landing page: GET / (authed vs anon variants), mounted at app level, no requireUser().
+  app.use(landingRouter(cfg));
+
   // Mounted at the app level (no prefix, no requireUser()) so its internal /auth/*
   // paths are seen absolute -- these ARE the auth entry points (magic-link request,
   // verify, logout), so gating them behind requireUser() would be self-defeating.
@@ -101,6 +106,7 @@ export function createApp(deps: AppDeps): Express {
   // path — /api/search-refs must hit the 401-JSON branch, /batches/:id/validate the
   // 302-redirect branch (both routers apply their own requireUser() per route).
   app.use(validateRouter(pool, cfg));
+  app.use(resultsRouter(pool));
   app.use(searchRouter(pool));
 
   app.use(notFound());

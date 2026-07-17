@@ -1,0 +1,43 @@
+{% extends "layout.njk" %}
+{% block head %}
+  {% if not devBypassTurnstile %}
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  {% endif %}
+{% endblock %}
+{% block content %}
+<header class="hero">
+  <h1 class="wordmark">NotBulk</h1>
+  <p class="tagline">Find out what's not bulk</p>
+</header>
+
+<section class="signin">
+  <form method="post" action="/auth/magic-link">
+    <label>Email <input type="email" name="email" required autocomplete="email"></label>
+    {% if not devBypassTurnstile %}
+      <div class="cf-turnstile" data-sitekey="{{ turnstileSiteKey }}"></div>
+    {% endif %}
+    <button type="submit">Send magic link</button>
+  </form>
+</section>
+
+{% if authed %}
+<section class="upload">
+  <h2>Upload photos</h2>
+  <form method="post" action="/batches" enctype="multipart/form-data">
+    <input type="file" name="photos" accept="image/jpeg,image/png" multiple>
+    <label>…or paste Imgur/Reddit links (one per line)
+      <textarea name="urls" rows="3" placeholder="https://i.imgur.com/…"></textarea>
+    </label>
+    {% if not devBypassTurnstile %}
+      <div class="cf-turnstile" data-sitekey="{{ turnstileSiteKey }}"></div>
+    {% endif %}
+    <button type="submit">Start batch</button>
+  </form>
+</section>
+{% endif %}
+
+<footer class="disclaimer">
+  <p>NotBulk is an unofficial fan tool. Not affiliated with, endorsed, or sponsored by Nintendo, Creatures Inc., GAME FREAK Inc., or The Pokémon Company.</p>
+  <nav><a href="#">Terms</a> · <a href="#">Privacy</a></nav>
+</footer>
+{% endblock %}

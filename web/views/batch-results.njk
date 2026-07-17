@@ -1,0 +1,25 @@
+{% extends "layout.njk" %}
+{% block content %}
+<section class="results">
+  <h1>Batch results</h1>
+  <div class="summary">
+    <span>{{ cards | length }} distinct cards · {{ total }} total</span>
+    {% if remaining > 0 %}
+      <a href="/batches/{{ batch.id }}/validate">Review {{ remaining }} remaining &rarr;</a>
+    {% endif %}
+  </div>
+  <div class="grid">
+    {% for c in cards %}
+      <figure class="card" data-card-id="{{ c.id }}">
+        <img src="/img/crop/{{ c.id }}" alt="{{ c.name }}">
+        <figcaption>
+          <b>{{ c.name or 'unknown' }}</b>
+          <span>{{ c.set_name }} #{{ c.number }}</span>
+          <span>{{ c.finish or '—' }} · {{ c.confidence }}%{% if c.quantity > 1 %} · ×{{ c.quantity }}{% endif %}</span>
+          <span class="status status-{{ c.status }}">{{ c.status }}</span>
+        </figcaption>
+      </figure>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
