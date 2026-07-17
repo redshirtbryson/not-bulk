@@ -100,8 +100,8 @@ def test_reject_non_https(monkeypatch):
 def _fetch_with_transport(monkeypatch, url, transport):
     monkeypatch.setattr(fetcher.socket, "getaddrinfo", lambda *a, **k: _addrinfo("1.1.1.1"))
     monkeypatch.setattr(fetcher, "_build_client",
-                        lambda ip, host, cfg: httpx.Client(transport=transport,
-                                                           follow_redirects=False))
+                        lambda cfg: httpx.Client(transport=transport,
+                                                 follow_redirects=False))
     return fetcher.fetch_image(url, CFG)
 
 
@@ -152,7 +152,7 @@ def test_enumerate_imgur_regates_external_entries(monkeypatch):
                               json=album_json)
     monkeypatch.setenv("IMGUR_CLIENT_ID", "test-client")
     monkeypatch.setattr(fetcher, "_build_client",
-                        lambda ip, host, cfg: httpx.Client(
+                        lambda cfg: httpx.Client(
                             transport=httpx.MockTransport(handler), follow_redirects=False))
     urls = fetcher.enumerate_imgur("https://imgur.com/a/abc123", CFG)
     assert urls == ["https://i.imgur.com/a1.png"]   # external entry re-gated out

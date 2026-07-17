@@ -79,13 +79,14 @@ def _check_allowlist(url: str, cfg: dict) -> tuple[str, str]:
     return host, path
 
 
-def _build_client(ip: str, host: str, cfg: dict) -> httpx.Client:
-    """httpx client pinned to `ip`, with TLS SNI + cert validation for `host`.
+def _build_client(cfg: dict) -> httpx.Client:
+    """Build the httpx client used for all fetches: redirects disabled,
+    verify=True, timeout from cfg.
 
-    We rewrite the request URL to https://{ip}{path}, set the Host header to the
-    real hostname, and pass extensions={'sni_hostname': host} so the TLS
-    handshake uses the correct SNI and the cert is verified against `host`.
-    Redirects are disabled at the client level.
+    IP pinning itself is NOT done here — callers rewrite the request URL to
+    https://{ip}{path}, set the Host header to the real hostname, and pass
+    extensions={'sni_hostname': host} per-request so the TLS handshake uses the
+    correct SNI and the cert is verified against the real host.
     """
     return httpx.Client(
         follow_redirects=False,
@@ -103,7 +104,7 @@ def fetch_image(url: str, cfg: dict) -> bytes:
     # Pin to the verified IP; restore Host header + TLS SNI to the real host.
     literal = f"[{ip}]" if ":" in ip else ip
     pinned_url = f"https://{literal}{path}"
-    client = _build_client(ip, host, cfg)
+    client = _build_client(cfg)
     try:
         with client.stream(
             "GET", pinned_url,
@@ -160,7 +161,7 @@ def enumerate_imgur(url: str, cfg: dict) -> list[str]:
     album_id = _album_id_from(url)
     api_host = "api.imgur.com"
     ip = resolve_public(api_host)
-    client = _build_client(ip, api_host, cfg)
+    client = _build_client(cfg)
     literal = f"[{ip}]" if ":" in ip else ip
     try:
         resp = client.get(
@@ -182,7 +183,7 @@ def enumerate_reddit(url: str, cfg: dict) -> list[str]:
     json_url = url.rstrip("/") + ".json"
     host, path = _check_allowlist(json_url, cfg)
     ip = resolve_public(host)
-    client = _build_client(ip, host, cfg)
+    client = _build_client(cfg)
     literal = f"[{ip}]" if ":" in ip else ip
     try:
         resp = client.get(
