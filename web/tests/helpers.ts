@@ -64,6 +64,10 @@ export const testCfg = {
     photos_per_batch: 10, anon_photos_per_batch: 3,
     max_photo_bytes: 10485760, max_pixels: 50000000, max_cards_per_photo: 30,
   },
+  fetcher: {
+    allowed_hosts: ["i.imgur.com", "imgur.com", "api.imgur.com", "i.redd.it", "www.reddit.com"],
+    max_bytes: 15728640, timeout_seconds: 20,
+  },
 } as unknown as Config;
 
 /** The test cookie name; the default test sessionMiddleware decodes `req.user` from it. */

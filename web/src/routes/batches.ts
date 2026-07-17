@@ -18,6 +18,33 @@ export interface BatchesDeps {
   verifyTurnstile?: typeof realVerifyTurnstile;
 }
 
+interface ParsedUrl { url: string; sourceType: 'imgur' | 'reddit' }
+
+// Exact-hostname allowlist. Case-insensitive EXACT match — no suffix/subdomain
+// tricks ('evil-imgur.com', 'imgur.com.evil.io' both fail). No network I/O here;
+// the real SSRF gate is worker-side (Task 13).
+function preGateUrl(raw: string, cfg: Config): ParsedUrl | { error: string } {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return { error: 'not a valid URL' };
+  }
+  if (u.protocol !== 'https:') return { error: 'https only' };
+  const host = u.hostname.toLowerCase();
+  const allowed = cfg.fetcher.allowed_hosts.map((h) => h.toLowerCase());
+  if (!allowed.includes(host)) return { error: `host not allowed: ${host}` };
+
+  // Non-empty path for album/gallery hosts (imgur.com album/gallery, reddit post).
+  const pathEmpty = u.pathname === '' || u.pathname === '/';
+  if ((host === 'imgur.com' || host === 'www.reddit.com') && pathEmpty) {
+    return { error: 'album/gallery URL requires a path' };
+  }
+  const sourceType: 'imgur' | 'reddit' =
+    host === 'www.reddit.com' || host === 'i.redd.it' ? 'reddit' : 'imgur';
+  return { url: raw, sourceType };
+}
+
 export function batchesRouter(deps: BatchesDeps): Router {
   const { pool, cfg, storage } = deps;
   const gate = deps.gateImage ?? realGateImage;
@@ -44,7 +71,73 @@ export function batchesRouter(deps: BatchesDeps): Router {
       // Mixed input guard (Task 9 owns the urls branch).
       if (files.length > 0 && urls) return res.status(400).send('choose one input method');
       if (files.length === 0 && !urls) return res.status(400).send('no photos supplied');
-      if (urls) return res.status(400).send('urls handled by Task 9'); // replaced in Task 9
+
+      if (urls) {
+        // Split on any whitespace/newlines; max 10 entries pre-trim (contract).
+        const rawEntries = urls.split(/\s+/).map((s) => s.trim()).filter(Boolean);
+        if (rawEntries.length > 10) return res.status(400).send('too many urls (max 10)');
+        if (rawEntries.length === 0) return res.status(400).send('no urls supplied');
+
+        const parsed: ParsedUrl[] = [];
+        for (const entry of rawEntries) {
+          const g = preGateUrl(entry, cfg);
+          if ('error' in g) return res.status(400).send(g.error); // reject the whole request
+          parsed.push(g);
+        }
+
+        const okUrl = await verifyTurnstile(cfg, (req.body?.['cf-turnstile-response'] as string) ?? '', req.ip);
+        if (!okUrl) return res.status(400).send('turnstile verification failed');
+
+        const userId = req.user!.id;
+        const count = parsed.length;
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+
+          const reserve = await checkAndReserve(client, cfg, userId, {
+            batches: 1,
+            photos: count,
+            fetches: count,
+          });
+          if (!reserve.ok) {
+            await client.query('ROLLBACK');
+            return res.status(400).send(`quota exceeded: ${reserve.reason}`);
+          }
+
+          const { rows: batchRows } = await client.query(
+            `INSERT INTO batches (id, user_id, status, origin_url)
+             VALUES ($1, $2, 'processing', $3) RETURNING id`,
+            [uuidv7(), userId, parsed[0].url],
+          );
+          const batchId = batchRows[0].id;
+
+          for (const p of parsed) {
+            const photoId = uuidv7();
+            // status 'fetching', storage_key NULL — worker fills bytes (Task 13).
+            await client.query(
+              `INSERT INTO photos (id, batch_id, status, source_type, source_url)
+               VALUES ($1, $2, 'fetching', $3, $4) RETURNING id`,
+              [photoId, batchId, p.sourceType, p.url],
+            );
+            await enqueue(client, {
+              type: 'fetch_source',
+              payload: { photo_id: photoId },
+              batchId,
+              userId,
+            });
+          }
+
+          await client.query(`UPDATE batches SET photo_count = $2 WHERE id = $1`, [batchId, count]);
+          await client.query('COMMIT');
+          await pool.query('NOTIFY jobs_wake');
+          return res.redirect(302, `/batches/${batchId}`);
+        } catch (err) {
+          await client.query('ROLLBACK');
+          return next(err);
+        } finally {
+          client.release();
+        }
+      }
 
       // Turnstile before any DB work.
       const ok = await verifyTurnstile(cfg, (req.body?.['cf-turnstile-response'] as string) ?? '', req.ip);
