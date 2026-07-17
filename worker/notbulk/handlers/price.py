@@ -1,13 +1,20 @@
 """price job handler.
 
 payload {card_ref_id, finish}:
-  read_cached -> if fresh (incl. a fresh NULL known-miss), no-op and return.
+  read_cached -> if fresh (incl. a fresh NULL known-miss), skip the resolve/upsert
+        but still invoke finish.maybe_narrow_finish_flag (Task 8) before returning —
+        a card can enter validation after its ref's prices are already fresh-cached
+        (e.g. from an earlier scan within the TTL), and without this call it would
+        never auto-narrow until a human intervenes or the cache expires.
   else: build the configured source list (cfg.pricing.source_order), resolve_price,
         upsert (a genuine miss stores price_cents=NULL so we don't re-hit within TTL).
         SourceUnavailable from resolve_price PROPAGATES so the job retries via the
         queue's attempts/backoff (worker.py's fail(dead=False)).
   after a successful upsert, invoke finish.maybe_narrow_finish_flag (Task 8) so a
   now-priced finish can clear a finish_needs_confirmation flag when the spread is small.
+  maybe_narrow_finish_flag is itself fully guarded (only narrows validation-candidate
+  cards with all-priced <=15% spread), so calling it on every price job — fresh-cache
+  hit or not — is safe and idempotent.
 
 Money is integer cents throughout (plan Global Constraints).
 """
@@ -43,7 +50,11 @@ def handle_price(pool, storage, payload: dict, cfg: dict) -> None:
 
     fresh, _cents = cache.read_cached(pool, card_ref_id, finish_key, ttl_hours)
     if fresh:
-        # A fresh row (real price OR a fresh NULL known-miss) needs no refetch.
+        # A fresh row (real price OR a fresh NULL known-miss) needs no refetch, but a
+        # card can reach validation after this finish was already priced (e.g. an
+        # earlier scan populated the cache) and never got evaluated for narrowing.
+        # Run the guarded, idempotent narrow check before the early return.
+        finish.maybe_narrow_finish_flag(pool, card_ref_id, cfg)
         return
 
     # Test-only seam: deterministic offline pricing for the M3 E2E loop.

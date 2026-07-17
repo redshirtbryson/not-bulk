@@ -22,8 +22,8 @@ describe('GET /batches/:id/validate', () => {
       candidates: [{ card_ref_id: 'base1-4', score: 0.62 }, { card_ref_id: 'base1-2', score: 0.5 }],
     }] });
     pool.enqueue({ rows: [                                     // candidate ref names
-      { id: 'base1-4', name: 'Charizard', set_name: 'Base', number: '4', finishes: ['holo'] },
-      { id: 'base1-2', name: 'Blastoise', set_name: 'Base', number: '2', finishes: ['holo'] },
+      { id: 'base1-4', name: 'Charizard', set_name: 'Base', number: '4', finishes: ['holofoil'] },
+      { id: 'base1-2', name: 'Blastoise', set_name: 'Base', number: '2', finishes: ['holofoil'] },
     ] });
     const app = createApp(makeDeps({ pool }));
     const res = await authedAgent(app, userA).get('/batches/b1/validate');
@@ -114,11 +114,11 @@ describe('POST /cards/:id/validate', () => {
 
     const app = createApp(makeDeps({ pool }));
     await authedAgent(app, userA).post('/cards/c1/validate').type('form')
-      .send({ card_ref_id: 'base1-4', finish: 'holo' });
+      .send({ card_ref_id: 'base1-4', finish: 'holofoil' });
     const upd = client.calls.find((c) => c.sql.includes('UPDATE cards'))!;
     expect(upd.sql).toContain('finish=');
     expect(upd.sql).toContain('finish_needs_confirmation=false');
-    expect(upd.params).toContain('holo');
+    expect(upd.params).toContain('holofoil');
   });
 
   it('merges into the earliest same (ref, finish) card: target quantity++ and this card status=merged', async () => {
@@ -136,7 +136,7 @@ describe('POST /cards/:id/validate', () => {
 
     const app = createApp(makeDeps({ pool }));
     await authedAgent(app, userA).post('/cards/c2/validate').type('form')
-      .send({ card_ref_id: 'base1-4', finish: 'holo' });
+      .send({ card_ref_id: 'base1-4', finish: 'holofoil' });
     const inc = client.calls.find((c) => c.sql.includes('quantity=quantity+1'))!;
     expect(inc.params).toContain('c1');                 // target is the earliest match
     const merged = client.calls.find((c) => c.sql.includes("'merged'") || c.params?.includes('merged'))!;

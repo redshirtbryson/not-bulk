@@ -8,7 +8,10 @@ import { getOwnedBatch } from '../queries/batches.js';
 import { getOwnedCard } from '../queries/cards.js';
 import { enqueue } from '../services/jobs.js';
 
-const FINISHES = ['non-holo', 'reverse', 'holo'] as const;
+// tcgplayer finish keys — same vocabulary as card_refs.finishes, prices.finish, and
+// what identify/finish-narrowing write to cards.finish, so the whole cards.finish
+// column is one vocabulary end to end.
+const FINISHES = ['normal', 'holofoil', 'reverseHolofoil'] as const;
 const validateBody = z.object({
   card_ref_id: z.string().min(1),
   finish: z.enum(FINISHES).optional(),
@@ -34,7 +37,8 @@ export function validateRouter(pool: Pool, _cfg: Config): Router {
     const card = next.rows[0];
     if (!card) return res.render('validate.njk', { batch, card: null });
 
-    // Top candidate + up to 2 alternates; join card_refs for names (text only — Assembly Resolution 9).
+    // Top candidate + up to 2 alternates; join card_refs for names. Reference thumbnails
+    // render via the local /img/ref proxy (see validate-card.njk, M3 Task 9).
     const ids = [card.card_ref_id, ...(card.candidates ?? []).map((c: any) => c.card_ref_id)].filter(Boolean);
     const uniq = Array.from(new Set(ids)).slice(0, 3);
     const refs = uniq.length

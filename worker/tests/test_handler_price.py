@@ -44,15 +44,15 @@ def _wire(monkeypatch, spy, *, fresh, cached_cents=None, resolve_result=None, re
                         lambda pool, cr, cfg: spy.narrowed.append(cr))
 
 
-def test_fresh_cache_is_a_noop():
+def test_fresh_cache_skips_resolve_but_still_narrows():
     spy = _Spy()
     import pytest as _pt
     with _pt.MonkeyPatch.context() as mp:
         _wire(mp, spy, fresh=True, cached_cents=1234)
         ph.handle_price(pool=object(), storage=object(), payload=PAYLOAD, cfg=CFG)
-    assert spy.resolved == []      # resolve NOT called on a fresh hit
-    assert spy.upserts == []       # nothing re-written
-    assert spy.narrowed == []      # no narrow on a no-op
+    assert spy.resolved == []           # resolve NOT called on a fresh hit
+    assert spy.upserts == []            # nothing re-written
+    assert spy.narrowed == ["sv4-123"]  # narrow IS still evaluated on the fresh-cache path
 
 
 def test_resolves_and_upserts_then_narrows(monkeypatch):

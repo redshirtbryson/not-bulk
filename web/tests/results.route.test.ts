@@ -17,9 +17,9 @@ describe('GET /batches/:id/results', () => {
     const pool = new FakePool();
     pool.enqueue({ rows: [{ id: 'b1', user_id: 'user-a', status: 'complete', photo_count: 2 }] }); // getOwnedBatch
     pool.enqueue({ rows: [                                    // resolved cards
-      { id: 'c1', name: 'Charizard', set_name: 'Base', number: '4', finish: 'holo',
+      { id: 'c1', name: 'Charizard', set_name: 'Base', number: '4', finish: 'holofoil',
         confidence: 96, quantity: 1, status: 'auto' },
-      { id: 'c2', name: 'Blastoise', set_name: 'Base', number: '2', finish: 'holo',
+      { id: 'c2', name: 'Blastoise', set_name: 'Base', number: '2', finish: 'holofoil',
         confidence: 88, quantity: 2, status: 'validated' },
     ] });
     pool.enqueue({ rows: [{ n: 0 }] }); // remaining validation count

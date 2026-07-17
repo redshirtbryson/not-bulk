@@ -53,7 +53,7 @@ d('M2 e2e loop (real Postgres + MinIO + stubbed worker)', () => {
     // on rerun). set_id/image_url are NOT NULL in the schema; values are inert here.
     await pool.query(
       `INSERT INTO card_refs (id, name, set_id, set_name, number, image_url, finishes)
-         VALUES ($1,'E2E Test Card','e2e-set','E2E Set','4','https://example.invalid/card.png', ARRAY['holo'])
+         VALUES ($1,'E2E Test Card','e2e-set','E2E Set','4','https://example.invalid/card.png', ARRAY['holofoil'])
        ON CONFLICT (id) DO NOTHING`,
       [REF_ID],
     );
@@ -171,7 +171,7 @@ d('M2 e2e loop (real Postgres + MinIO + stubbed worker)', () => {
       .post(`/cards/${target.id}/validate`)
       .set('Cookie', `nb_session=${token}`)
       .type('form')
-      .send({ card_ref_id: REF_ID, finish: 'holo' });
+      .send({ card_ref_id: REF_ID, finish: 'holofoil' });
     expect(v.status).toBe(302);
 
     await waitFor(async () => {
