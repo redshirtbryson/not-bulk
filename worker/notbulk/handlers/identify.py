@@ -36,6 +36,7 @@ from ..cli import resolve_config_path
 from ..embed import Embedder
 from ..hash_index import HashIndex
 from ..ocr import OcrReader
+from ..types import Identification
 
 _DEPS: CascadeDeps | None = None
 
@@ -138,10 +139,20 @@ def handle_identify(pool, storage, payload: dict, cfg: dict) -> None:
             _cid, batch_id, user_id, crop_key = row
         conn.commit()
 
-    deps = _deps(cfg, pool)
-    crop_bytes = storage.get(crop_key)
-    crop = cv2.imdecode(np.frombuffer(crop_bytes, np.uint8), cv2.IMREAD_COLOR)
-    ident = identify_crop(crop, deps, cfg)
+    # Test-only seam: deterministic offline identification for the M2 E2E loop.
+    # Returns a canned high-confidence 'h'-stage hit so the queue/storage/SSE/correction
+    # path can be exercised without loading eval models. Never set in production.
+    if os.environ.get("NOTBULK_STUB_IDENTIFY") == "1":
+        ref_id = os.environ.get("NOTBULK_STUB_REF_ID", "base1-4")
+        ident = Identification(
+            card_ref_id=ref_id, confidence=95, accepted_stage="h",
+            rotation=0, methods=[], candidates=[],
+        )
+    else:
+        deps = _deps(cfg, pool)
+        crop_bytes = storage.get(crop_key)
+        crop = cv2.imdecode(np.frombuffer(crop_bytes, np.uint8), cv2.IMREAD_COLOR)
+        ident = identify_crop(crop, deps, cfg)
 
     status = _status_for_stage(ident.accepted_stage)
     finish = None

@@ -171,10 +171,13 @@ def notify_progress(pool, batch_id: str, event: str, **ids: str) -> None:
     channel name is a fixed literal and the payload is JSON built here, so no
     user data is ever interpolated into SQL text.
     """
-    payload = {"batch_id": batch_id, "event": event}
+    # batch_id/card_id/photo_id often arrive straight from a psycopg cursor fetch
+    # of a `uuid` column (a uuid.UUID object, not str) rather than from a JSON
+    # payload — str() them so json.dumps never raises on a UUID.
+    payload = {"batch_id": str(batch_id), "event": event}
     for key, value in ids.items():
         if value is not None:
-            payload[key] = value
+            payload[key] = str(value)
     with pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT pg_notify(%s, %s)", ("batch_progress", json.dumps(payload)))
