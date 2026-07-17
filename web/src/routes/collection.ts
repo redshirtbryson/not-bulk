@@ -3,7 +3,7 @@ import type { Pool } from "pg";
 import type { Config } from "../config.js";
 import type { AuthedRequest } from "../middleware/session.js";
 import { requireUser } from "../middleware/session.js";
-import { getCollection, getCollectionStats, type CollectionFilters, type CollectionRow } from "../queries/collection.js";
+import { getCollection, getCollectionStats, getCollectionForExport, type CollectionFilters, type CollectionRow } from "../queries/collection.js";
 import { formatCents } from "../lib/money.js";
 
 const SORTS = new Set(["value_desc", "name_asc", "set_asc"]);
@@ -26,6 +26,20 @@ function priceDisplay(row: CollectionRow): string {
   if (!row.has_price_row) return "pending price";
   if (row.price_cents == null) return "no price data";
   return formatCents(row.price_cents);
+}
+
+// CSV boundary: null price_cents -> "" (never "$0.00"). Delegates to the shared formatCents
+// for the non-null case — same helper the explorer view uses via priceDisplay().
+function csvPrice(cents: number | null): string {
+  return cents == null ? "" : formatCents(cents);
+}
+
+// RFC 4180: quote a field containing comma/quote/CR/LF; double any internal quote.
+function csvCell(value: string): string {
+  if (/[",\r\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
 }
 
 export function collectionRouter(pool: Pool, cfg: Config): Router {
@@ -55,6 +69,35 @@ export function collectionRouter(pool: Pool, cfg: Config): Router {
       pageSize,
       hasNext: rows.length === pageSize,
     });
+  });
+
+  r.get("/collection/export.csv", requireUser(), async (req: AuthedRequest, res) => {
+    const rows = await getCollectionForExport(pool, req.user!.id, parseFilters(req.query as any));
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="notbulk-collection.csv"');
+
+    // §6.6 column order (verbatim).
+    res.write(
+      "name,set,number,finish,quantity,price,price_source,price_date,confidence,batch,image_filename\r\n",
+    );
+    for (const row of rows) {
+      const cells = [
+        row.name ?? "",
+        row.set_name ?? "",
+        row.number ?? "",
+        row.finish ?? "",
+        String(row.quantity),
+        csvPrice(row.price_cents),
+        row.price_source ?? "",
+        row.price_fetched_at ?? "",
+        String(row.confidence),
+        row.batch_id,
+        `${row.card_id}.webp`,
+      ];
+      res.write(cells.map((c) => csvCell(String(c))).join(",") + "\r\n");
+    }
+    res.end();
   });
 
   return r;

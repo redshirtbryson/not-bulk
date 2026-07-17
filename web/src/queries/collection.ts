@@ -124,3 +124,29 @@ export async function getCollectionStats(
     oldest_price_at: row.oldest_price_at ?? null,
   };
 }
+
+// Full unpaginated collection for CSV export: same owner + status filter as getCollection,
+// deterministic ORDER BY, NO LIMIT/OFFSET (the export is the entire collection).
+export async function getCollectionForExport(
+  pool: Pool,
+  userId: string,
+  opts: CollectionFilters,
+): Promise<CollectionRow[]> {
+  const { sql: where, params } = whereClause(userId, opts);
+  const sql =
+    `SELECT c.id AS card_id, c.card_ref_id, c.crop_storage_key,
+            r.name, r.set_name, r.number,
+            c.finish, c.quantity, c.confidence, c.status,
+            pr.price_cents, pr.source AS price_source, pr.fetched_at AS price_fetched_at,
+            p.batch_id,
+            (pr.card_ref_id IS NOT NULL) AS has_price_row
+       FROM cards c
+       JOIN photos p ON c.photo_id = p.id
+       JOIN batches b ON p.batch_id = b.id
+       JOIN card_refs r ON c.card_ref_id = r.id
+       LEFT JOIN prices pr ON pr.card_ref_id = c.card_ref_id AND pr.finish = c.finish` +
+    where +
+    ` ORDER BY r.set_name, r.number`;
+  const { rows } = await pool.query(sql, params);
+  return rows as CollectionRow[];
+}
