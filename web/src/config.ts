@@ -37,6 +37,13 @@ export interface Config {
   refproxy: { allowed_image_host: string; cache_prefix: string; max_bytes: number };
   explorer: { page_size: number; default_sort: string };
   upload: { accept_heic: boolean };
+  export: {
+    retention_hours: number;
+    render_timeout_ms: number;
+    page_size: string;
+    storage_prefix: string;
+    max_cards: number;
+  };
 }
 
 function findConfigPath(): string {
