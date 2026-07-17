@@ -137,6 +137,55 @@ ref object so `/img/ref` needs no network fetch):
 
 The test self-cleans (deletes its seeded rows, prices, and MinIO objects in `afterAll`).
 
+### M4 PDF export + HEIC
+
+A fourth process joins the M2/M3 set: the Node **export worker**, which drains `export`
+jobs, renders the collection PDF (Puppeteer + system `google-chrome`), uploads it to MinIO
+under `exports/{user_id}/{export_id}.pdf`, and marks the `exports` row ready.
+
+4. Export worker (from the repo root, Node v20 on PATH):
+
+       cd web && pnpm export-worker
+
+   or equivalently:
+
+       cd web && DATABASE_URL='postgres://notbulk:notbulk@127.0.0.1:5434/notbulk?sslmode=disable' \
+         pnpm tsx src/export-worker/worker.ts
+
+The user flow: `GET /collection` → **Export PDF** → `POST /collection/export.pdf` (creates a
+queued `exports` row + an `export` job, NOTIFYs) → `/collection/exports/:id` self-refreshes
+(meta-refresh, CSP-safe, no JS) until `ready`, then offers an owner-checked signed download.
+Expired exports (`expires_at` past, config `export.retention_hours`, default 48) return `410`.
+
+**HEIC uploads** are now accepted (`upload.accept_heic: true`; heic-convert (WASM) decodes them,
+sharp re-encodes to WebP before the queue — the Python worker never sees HEIC).
+
+**E2E seams (test-only, never set in production):**
+
+- `NOTBULK_STUB_PDF=1` makes `renderCollectionPdf` return a canned minimal `%PDF` buffer and
+  skip the headless-browser launch, so the export E2E needs no Chromium.
+- `PDF_RENDER=1` runs the real-Puppeteer render leg of `export.e2e.test.ts` (independent of
+  `E2E`; needs `google-chrome`).
+
+### M4 export E2E
+
+`web/tests/e2e/export.e2e.test.ts` drives POST-export → real export-worker → row `ready` →
+signed download (asserts `%PDF`) plus a HEIC upload leg, against real Postgres + MinIO. Gated
+on `E2E=1`; the browser is stubbed with `NOTBULK_STUB_PDF=1`:
+
+    docker compose up -d
+    DATABASE_URL='postgres://notbulk:notbulk@127.0.0.1:5434/notbulk?sslmode=disable' \
+      DBMATE_MIGRATIONS_DIR=./migrations ./bin/dbmate up
+    cd web && E2E=1 DEV_BYPASS_TURNSTILE=1 NOTBULK_STUB_PDF=1 \
+      DATABASE_URL='postgres://notbulk:notbulk@127.0.0.1:5434/notbulk?sslmode=disable' \
+      pnpm vitest run tests/e2e/export.e2e.test.ts
+
+Run the REAL render once separately (no `E2E` needed):
+
+    cd web && PDF_RENDER=1 pnpm vitest run tests/e2e/export.e2e.test.ts -t "REAL Puppeteer"
+
+The test self-cleans (deletes its seeded rows, export artifacts, and MinIO crops in `afterAll`).
+
 ## Conventions
 - Conventional commits: `feat(area):`, `fix(area):`, `docs(area):`, `chore:`. Version is not in
   the commit subject.
