@@ -13,7 +13,7 @@ describe('GET /batches/:id/validate', () => {
     expect(res.status).toBe(404);
   });
 
-  it('renders the earliest validation card with top candidate + alternates (text only)', async () => {
+  it('renders the earliest validation card with reference thumbnails via the /img/ref proxy', async () => {
     const pool = new FakePool();
     pool.enqueue({ rows: [{ id: 'b1', user_id: 'user-a', status: 'processing', photo_count: 1 }] }); // getOwnedBatch
     pool.enqueue({ rows: [{                                    // next card
@@ -28,10 +28,16 @@ describe('GET /batches/:id/validate', () => {
     const app = createApp(makeDeps({ pool }));
     const res = await authedAgent(app, userA).get('/batches/b1/validate');
     expect(res.status).toBe(200);
-    expect(res.text).toContain('/img/crop/c1');   // user's own crop as an image
+    expect(res.text).toContain('/img/crop/c1');       // user's own crop as an image
     expect(res.text).toContain('Charizard');
     expect(res.text).toContain('Blastoise');
-    expect(res.text).not.toContain('images.pokemontcg.io'); // Assembly Resolution 9: no external ref image
+    // M3: candidates now carry a reference thumbnail served by the local proxy.
+    expect(res.text).toContain('/img/ref/base1-4');   // top candidate ref image (proxy)
+    expect(res.text).toContain('/img/ref/base1-2');   // alternate ref image (proxy)
+    // CSP still holds: the image src is the same-origin proxy, never the 3rd-party host,
+    // and there are no inline event handlers (onerror etc).
+    expect(res.text).not.toContain('images.pokemontcg.io');
+    expect(res.text).not.toContain('onerror');
     expect(res.text).toContain('name="finish"'); // finish selector shown (needs_confirmation)
   });
 

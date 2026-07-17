@@ -1,6 +1,8 @@
 <div class="validate-card" data-card-id="{{ card.id }}">
   <img class="crop" src="/img/crop/{{ card.id }}" alt="detected card crop">
-  {# Assembly Resolution 9: reference cards shown as TEXT ONLY, no external thumbnail #}
+  {# M3 amendment #1: reference art is served by the local /img/ref proxy (from MinIO),
+     so the CSP stays 'self'+MinIO. No inline onerror (CSP-forbidden); a proxy 404 just
+     shows the browser's broken-image glyph, which is acceptable. #}
   <form class="validate-form" method="post" action="/cards/{{ card.id }}/validate">
     <fieldset class="candidates">
       <legend>Which card is this?</legend>
@@ -8,6 +10,7 @@
         <label class="candidate">
           <input type="radio" name="card_ref_id" value="{{ opt.id }}"
                  {% if loop.first %}checked{% endif %} data-index="{{ loop.index }}">
+          <img class="ref-thumb" src="/img/ref/{{ opt.id }}" alt="reference card art" width="120">
           <span>{{ opt.name }} — {{ opt.set_name }} #{{ opt.number }}</span>
         </label>
       {% endfor %}
