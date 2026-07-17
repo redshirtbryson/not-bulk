@@ -209,6 +209,53 @@ def test_batch_completion_fires_once(monkeypatch):
     assert not any(e == "batch_complete" for e, _ in notified2)  # guarded: no double fire
 
 
+def _patch_with_enqueue(monkeypatch, ident):
+    """Like _patch, but also captures jobqueue.enqueue(...) calls."""
+    notified = _patch(monkeypatch, ident)
+    enqueued = []
+    monkeypatch.setattr(
+        ih.jobqueue, "enqueue",
+        lambda pool, jtype, payload, **kw: enqueued.append((jtype, payload, kw)) or "job-id",
+    )
+    return notified, enqueued
+
+
+def _price_jobs(enqueued):
+    return [(payload, kw) for jtype, payload, kw in enqueued if jtype == "price"]
+
+
+def test_resolved_card_enqueues_one_price_job_per_finish(monkeypatch):
+    ident = _ident("sv4-1", "h", [MethodResult("h", "sv4-1", 0.9)], ["sv4-1"])
+    _notified, enqueued = _patch_with_enqueue(monkeypatch, ident)
+    pool = ScriptedPool(_responder(finishes=["normal", "holofoil"]))
+    ih.handle_identify(pool, FakeStorage(), {"card_id": "card-1"}, CFG)
+
+    prices = _price_jobs(enqueued)
+    payloads = sorted(p["finish"] for p, _kw in prices)
+    assert payloads == ["holofoil", "normal"]                 # exactly one per finish
+    assert all(p["card_ref_id"] == "sv4-1" for p, _kw in prices)
+    # enqueued with batch/user context so the price jobs stay attributable
+    assert all(kw.get("batch_id") == "batch-1" and kw.get("user_id") == "user-1"
+               for _p, kw in prices)
+
+
+def test_single_finish_card_enqueues_one_price_job(monkeypatch):
+    ident = _ident("sv4-1", "h", [MethodResult("h", "sv4-1", 0.9)], ["sv4-1"])
+    _notified, enqueued = _patch_with_enqueue(monkeypatch, ident)
+    pool = ScriptedPool(_responder(finishes=["normal"]))
+    ih.handle_identify(pool, FakeStorage(), {"card_id": "card-1"}, CFG)
+    prices = _price_jobs(enqueued)
+    assert [p["finish"] for p, _kw in prices] == ["normal"]
+
+
+def test_null_card_ref_id_enqueues_no_price_jobs(monkeypatch):
+    ident = _ident(None, "validation", [MethodResult("a", "sv4-2", 0.5)], ["sv4-2"])
+    _notified, enqueued = _patch_with_enqueue(monkeypatch, ident)
+    pool = ScriptedPool(_responder(finishes=[]))
+    ih.handle_identify(pool, FakeStorage(), {"card_id": "card-1"}, CFG)
+    assert _price_jobs(enqueued) == []                        # no ref id -> no price jobs
+
+
 def test_nonexistent_card_id_is_a_clean_noop(monkeypatch):
     """Defensive belt-and-suspenders (Task 11 review): a card_id with no row
     (SELECT returns nothing) must not crash. identify_crop/_deps are patched to

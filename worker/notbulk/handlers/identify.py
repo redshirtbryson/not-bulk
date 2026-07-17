@@ -157,6 +157,7 @@ def handle_identify(pool, storage, payload: dict, cfg: dict) -> None:
     status = _status_for_stage(ident.accepted_stage)
     finish = None
     finish_needs_confirmation = False
+    finishes: list[str] = []
 
     if ident.card_ref_id is not None:
         with pool.connection() as conn:
@@ -195,6 +196,18 @@ def handle_identify(pool, storage, payload: dict, cfg: dict) -> None:
         conn.commit()
 
     jobqueue.notify_progress(pool, batch_id, "card_identified", card_id=card_id)
+
+    # Fan out one price job per finish of the resolved card. A card with no
+    # card_ref_id (validation/unreadable/null id) gets NO price jobs. `finishes`
+    # is the same list read above for the A1 finish rule; a card has few finishes
+    # so iterating the list is the de-dup (at most one job per (card_ref_id, finish)).
+    if ident.card_ref_id is not None:
+        for finish_key in finishes:
+            jobqueue.enqueue(
+                pool, "price",
+                {"card_ref_id": ident.card_ref_id, "finish": finish_key},
+                batch_id=batch_id, user_id=user_id,
+            )
 
     # LLM usage: any Method C result means one API call was made this run.
     if any(m.method == "c" for m in ident.methods):
