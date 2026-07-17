@@ -58,6 +58,51 @@ Local Postgres listens on host port **5434** (5432 is a native host service, 543
 another project) — see `docker-compose.yml`. Setting up the dev BWS token/project secrets is an
 owner action item; once done, use the `bws run --` form above.
 
+## Running M2 locally
+
+Three processes: compose services, the Node web app, the Python worker.
+
+Node must be v20 — set this once per shell before any `pnpm`/`node` command:
+
+    export PATH="$HOME/.nvm/versions/node/v20.20.2/bin:$PATH"
+
+1. Services (Postgres 5434, MinIO 9000, Mailpit 1025 / UI 8025):
+
+       docker compose up -d
+       DATABASE_URL='postgres://notbulk:notbulk@127.0.0.1:5434/notbulk?sslmode=disable' \
+         DBMATE_MIGRATIONS_DIR=./migrations ./bin/dbmate up
+
+2. Web app (http://127.0.0.1:3000):
+
+       cd web && DATABASE_URL='postgres://notbulk:notbulk@127.0.0.1:5434/notbulk?sslmode=disable' pnpm dev
+
+3. Worker:
+
+       cd worker && DATABASE_URL='postgres://notbulk:notbulk@127.0.0.1:5434/notbulk?sslmode=disable' uv run notbulk-worker
+
+Once BWS dev secrets exist, replace the inline `DATABASE_URL=` with the `bws run --` form:
+`bws run -- pnpm dev` and `bws run -- uv run notbulk-worker`. Turnstile is bypassed locally
+with `DEV_BYPASS_TURNSTILE=1` (logged loudly at startup); never set it in production.
+
+### M2 end-to-end loop test
+
+`web/tests/e2e/loop.e2e.test.ts` drives the full create -> process -> validate ->
+corrections-flywheel loop against the real local Postgres + MinIO, with a real worker
+subprocess (stubbed identification via `NOTBULK_STUB_IDENTIFY=1` — see the seam doc in
+`worker/notbulk/handlers/identify.py`). It's gated on `E2E=1` and skipped otherwise, so
+`pnpm vitest run` / `pnpm test` never runs it. Single-command form (the test spawns the
+worker itself in `beforeAll`):
+
+    docker compose up -d
+    DATABASE_URL='postgres://notbulk:notbulk@127.0.0.1:5434/notbulk?sslmode=disable' \
+      DBMATE_MIGRATIONS_DIR=./migrations ./bin/dbmate up
+    cd web && E2E=1 DEV_BYPASS_TURNSTILE=1 \
+      DATABASE_URL='postgres://notbulk:notbulk@127.0.0.1:5434/notbulk?sslmode=disable' \
+      pnpm vitest run tests/e2e/loop.e2e.test.ts
+
+`DATABASE_URL` is exported inline in these commands, never written to a file. The test
+self-cleans (deletes its seeded rows and MinIO objects in `afterAll`).
+
 ## Conventions
 - Conventional commits: `feat(area):`, `fix(area):`, `docs(area):`, `chore:`. Version is not in
   the commit subject.
