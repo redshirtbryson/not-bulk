@@ -13,10 +13,12 @@ class FakeCursor:
         self._script = list(script)
         self._current = []
         self.executed = []  # list of (sql, params) for assertions
+        self.rowcount = 0
 
     def execute(self, sql, params=None):
         self.executed.append((sql, params))
         self._current = self._script.pop(0) if self._script else []
+        self.rowcount = len(self._current)
         return self
 
     def fetchone(self):
@@ -38,6 +40,9 @@ class FakeConnection:
 
     def cursor(self):
         return self._cursor
+
+    def commit(self):     # jobqueue helpers commit; no-op for the fake
+        pass
 
     def __enter__(self):
         return self
