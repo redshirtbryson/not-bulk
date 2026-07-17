@@ -45,16 +45,32 @@ export class FakeMailer implements Mailer {
 
 export class FakeStorage {
   puts: Array<{ key: string; body: Buffer; contentType: string }> = [];
+  objects: Map<string, Buffer> = new Map();
   photoKey(u: string, b: string, p: string) { return `${u}/${b}/${p}.webp`; }
   cropKey(u: string, b: string, c: string) { return `${u}/${b}/crops/${c}.webp`; }
-  async put(key: string, body: Buffer, contentType: string) { this.puts.push({ key, body, contentType }); }
+  async put(key: string, body: Buffer, contentType: string) { this.puts.push({ key, body, contentType }); this.objects.set(key, body); }
+  async get(key: string): Promise<Buffer> {
+    const b = this.objects.get(key);
+    if (!b) throw new Error(`NoSuchKey: ${key}`);
+    return b;
+  }
   async signedGetUrl(key: string) { return `http://127.0.0.1:9000/notbulk/${key}?sig=canned`; }
   async delete() {}
+  seed(key: string, body: Buffer) { this.objects.set(key, body); }
 }
 
 /** Minimal typed Config stub for tests; override fields per test as needed. */
 export const testCfg = {
   web: { port: 3000, base_url: "http://127.0.0.1:3000", secure_cookies: false },
+  storage: {
+    endpoint: "http://127.0.0.1:9000", bucket: "notbulk",
+    access_key: "test-access-key", secret_key: "test-secret-key",
+    signed_url_ttl_seconds: 600,
+  },
+  export: {
+    retention_hours: 48, render_timeout_ms: 30000, page_size: "Letter",
+    storage_prefix: "exports", max_cards: 5000,
+  },
   auth: {
     session_absolute_days: 30, session_idle_days: 7, magic_link_expiry_minutes: 15,
     magic_links_per_email_hour: 3, magic_links_per_email_day: 10,

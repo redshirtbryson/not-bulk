@@ -204,6 +204,21 @@ describe('Architectural tripwire: every owned-resource queries/*.ts export is us
   // by userId so no id-guessing route can read another user's rows.
   const EXEMPT = new Set(['users.ts']);
 
+  // Per-function exemptions: worker-side helpers that are never reached from a
+  // user-facing route. They take an id drawn from a trusted source instead of
+  // filtering by userId — exactly like the Python jobqueue's claim()/fail(), which
+  // are also unscoped (by job ownership, not HTTP session ownership).
+  //   exports.ts:claimExportRow  — export worker claims by export_id from the job
+  //     payload it already dequeued under FOR UPDATE SKIP LOCKED (jobqueue.ts).
+  //   exports.ts:markExportReady / markExportFailed — worker-only terminal-state
+  //     writers called after claimExportRow already established the row is this
+  //     worker's job; re-checking userId here would be redundant, not protective.
+  const FN_EXEMPT = new Set([
+    'exports.ts:claimExportRow',
+    'exports.ts:markExportReady',
+    'exports.ts:markExportFailed',
+  ]);
+
   it('every exported async function in queries/*.ts (excluding identity lookups) takes a userId: string arg', () => {
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const dir = path.resolve(__dirname, '../src/queries');
@@ -218,6 +233,7 @@ describe('Architectural tripwire: every owned-resource queries/*.ts export is us
       let m: RegExpExecArray | null;
       while ((m = exportFn.exec(src)) !== null) {
         const [, name, sig] = m;
+        if (FN_EXEMPT.has(`${file}:${name}`)) continue;
         if (!/userId\s*:\s*string/.test(sig)) offenders.push(`${file}:${name}`);
       }
     }

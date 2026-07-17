@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "export-worker": "tsx src/export-worker/worker.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

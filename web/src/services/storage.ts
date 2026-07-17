@@ -45,6 +45,18 @@ export class Storage {
     );
   }
 
+  async get(key: string): Promise<Buffer> {
+    const out = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    const body = out.Body as unknown as AsyncIterable<Uint8Array>;
+    const chunks: Buffer[] = [];
+    for await (const chunk of body) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+
   async signedGetUrl(key: string): Promise<string> {
     return getSignedUrl(
       this.client,
