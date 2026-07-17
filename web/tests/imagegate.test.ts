@@ -1,10 +1,22 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import sharp from 'sharp';
 import { gateImage } from '../src/services/imagegate.js';
 import type { Config } from '../src/config.js';
 
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REAL_HEIC = readFileSync(join(HERE, 'fixtures/sample-card.heic')); // real heic-branded, 1053 bytes
+
 const cfg = {
   quotas: { max_pixels: 50_000_000, max_photo_bytes: 10_485_760 },
+  upload: { accept_heic: true },
+} as unknown as Config;
+
+const cfgNoHeic = {
+  quotas: { max_pixels: 50_000_000, max_photo_bytes: 10_485_760 },
+  upload: { accept_heic: false },
 } as unknown as Config;
 
 // A solid-colour rectangle JPEG/PNG — structured, DCT-safe.
@@ -99,5 +111,59 @@ describe('gateImage — rejects', () => {
   it('never throws out of gateImage on crafted malformed input (AC 8)', async () => {
     const junk = Buffer.from([0xff, 0xd8, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00]);
     await expect(gateImage(junk, cfg)).resolves.toMatchObject({ ok: false });
+  });
+});
+
+describe('gateImage — HEIC (M4)', () => {
+  it("isSupportedImage tags the real HEIC (and other HEIF brands) as 'heif'", async () => {
+    const { isSupportedImage } = await import('../src/services/imagegate.js');
+    expect(isSupportedImage(REAL_HEIC)).toBe('heif');
+    // brand-set coverage via a minimal ftyp header (sniff-only, not decoded here):
+    const ftyp = (brand: string) => {
+      const b = Buffer.alloc(12);
+      b.writeUInt32BE(12, 0); b.write('ftyp', 4, 'latin1'); b.write(brand, 8, 'latin1');
+      return b;
+    };
+    expect(isSupportedImage(ftyp('mif1'))).toBe('heif');
+    expect(isSupportedImage(ftyp('hevc'))).toBe('heif');
+  });
+
+  it("isSupportedImage still tags JPEG and PNG, and returns null for GIF", async () => {
+    const { isSupportedImage } = await import('../src/services/imagegate.js');
+    expect(isSupportedImage(await solid(32, 32, 'jpeg'))).toBe('jpeg');
+    expect(isSupportedImage(await solid(32, 32, 'png'))).toBe('png');
+    expect(isSupportedImage(Buffer.from('GIF89a', 'latin1'))).toBeNull();
+  });
+
+  it('accept_heic=true: the REAL HEIC decodes end-to-end to a WebP (genuine decode-success)', async () => {
+    const res = await gateImage(REAL_HEIC, cfg);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      // WebP magic: bytes 0..4 'RIFF', bytes 8..12 'WEBP'
+      expect(res.webp.subarray(0, 4).toString('latin1')).toBe('RIFF');
+      expect(res.webp.subarray(8, 12).toString('latin1')).toBe('WEBP');
+      expect(res.width).toBeGreaterThan(0);
+      expect(res.height).toBeGreaterThan(0);
+    }
+  });
+
+  it("accept_heic=false: the SAME real HEIC is sniff-rejected 'unsupported format' before any decode (kill-switch)", async () => {
+    const res = await gateImage(REAL_HEIC, cfgNoHeic);
+    expect(res).toEqual({ ok: false, reason: 'unsupported format' });
+  });
+
+  it("truncated HEIC (passes ftyp sniff, fails decode) → 'corrupt image', never throws (AC-8)", async () => {
+    const truncated = REAL_HEIC.subarray(0, 40); // still has the ftyp header, body cut off
+    await expect(gateImage(truncated, cfg)).resolves.toEqual({ ok: false, reason: 'corrupt image' });
+  });
+
+  it('does NOT regress JPEG/PNG accept (heic-convert not invoked for them)', async () => {
+    expect((await gateImage(await solid(200, 120, 'jpeg'), cfg)).ok).toBe(true);
+    expect((await gateImage(await solid(64, 64, 'png'), cfg)).ok).toBe(true);
+  });
+
+  it("still rejects a GIF with 'unsupported format'", async () => {
+    const res = await gateImage(Buffer.from('GIF89a', 'latin1'), cfg);
+    expect(res).toEqual({ ok: false, reason: 'unsupported format' });
   });
 });

@@ -36,6 +36,7 @@ export interface Config {
   turnstile: { site_key: string; secret: string };
   refproxy: { allowed_image_host: string; cache_prefix: string; max_bytes: number };
   explorer: { page_size: number; default_sort: string };
+  upload: { accept_heic: boolean };
 }
 
 function findConfigPath(): string {
