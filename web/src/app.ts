@@ -8,6 +8,7 @@ import type { Config } from "./config.js";
 import type { Mailer } from "./services/mailer.js";
 import { smtpMailer } from "./services/mailer.js";
 import { Storage } from "./services/storage.js";
+import { sessionMiddleware as realSessionMiddleware } from "./middleware/session.js";
 import type { gateImage } from "./services/imagegate.js";
 import type { verifyTurnstile } from "./services/turnstile.js";
 import { csp } from "./middleware/csp.js";
@@ -62,7 +63,10 @@ export function createApp(deps: AppDeps): Express {
     }
   });
 
-  if (deps.sessionMiddleware) app.use(deps.sessionMiddleware);
+  // Defaults to the real DB-backed session middleware (mirrors the storage/mailer
+  // deps pattern); tests inject a lightweight cookie-decoding seam. Without this
+  // default the production server never authenticates any request.
+  app.use(deps.sessionMiddleware ?? realSessionMiddleware(pool, cfg));
 
   // Landing page: GET / (authed vs anon variants), mounted at app level, no requireUser().
   app.use(landingRouter(cfg));
