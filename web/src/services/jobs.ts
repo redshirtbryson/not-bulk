@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { uuidv7 } from 'uuidv7';
 import type { PoolClient } from 'pg';
 
-export type JobType = 'detect' | 'identify' | 'fetch_source' | 'ingest_correction';
+export type JobType = 'detect' | 'identify' | 'fetch_source' | 'ingest_correction' | 'export';
 
 export const detectPayload = z.object({ photo_id: z.string() }).strict();
 export const identifyPayload = z.object({ card_id: z.string() }).strict();
@@ -10,12 +10,14 @@ export const fetchSourcePayload = z.object({ photo_id: z.string() }).strict();
 export const ingestCorrectionPayload = z
   .object({ card_id: z.string(), actual_ref_id: z.string(), predicted_ref_id: z.string().nullable() })
   .strict();
+export const exportPayload = z.object({ export_id: z.string() }).strict();
 
 const SCHEMAS: Record<JobType, z.ZodType> = {
   detect: detectPayload,
   identify: identifyPayload,
   fetch_source: fetchSourcePayload,
   ingest_correction: ingestCorrectionPayload,
+  export: exportPayload,
 };
 
 export interface EnqueueJob {

@@ -1,0 +1,28 @@
+{% extends "layout.njk" %}
+{% block title %}Export — NotBulk{% endblock %}
+
+{% block head %}
+  {% if not terminal %}<meta http-equiv="refresh" content="3" />{% endif %}
+{% endblock %}
+
+{% block content %}
+<section class="export-status">
+  <h1>PDF export</h1>
+
+  {% if export.status == "queued" %}
+    <p class="status queued">Queued — waiting for a render slot. This page refreshes automatically.</p>
+  {% elif export.status == "rendering" %}
+    <p class="status rendering">Rendering your collection PDF. This page refreshes automatically.</p>
+  {% elif export.status == "ready" %}
+    <p class="status ready">Your PDF is ready ({{ export.card_count }} cards).</p>
+    <p><a class="download" href="/collection/exports/{{ export.id }}/download">Download PDF</a></p>
+    <p class="hint">The download link expires after the retention window.</p>
+  {% elif export.status == "failed" %}
+    <p class="status failed">Export failed.</p>
+    {% if export.last_error %}<p class="error">Reason: {{ export.last_error }}</p>{% endif %}
+    <p><a href="/collection">Back to your collection</a></p>
+  {% endif %}
+
+  <p class="back"><a href="/collection">&larr; Collection</a></p>
+</section>
+{% endblock %}

@@ -86,7 +86,12 @@
       {% endif %}
     </nav>
 
-    <p class="export"><a href="/collection/export.csv">Download CSV</a></p>
+    <p class="export">
+      <a href="/collection/export.csv">Download CSV</a>
+      <form method="post" action="/collection/export.pdf" class="export-pdf">
+        <button type="submit">Export PDF</button>
+      </form>
+    </p>
   {% endif %}
 </section>
 <script src="/js/collection.js" defer></script>
