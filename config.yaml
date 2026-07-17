@@ -63,3 +63,14 @@ refproxy:
   allowed_image_host: "images.pokemontcg.io"
   cache_prefix: "refs"                  # MinIO key prefix: refs/{card_ref_id}.webp
   max_bytes: 5242880                    # 5 MB cap on a reference-image fetch
+export:
+  retention_hours: 48
+  render_timeout_ms: 30000
+  page_size: "Letter"
+  storage_prefix: "exports"
+  max_cards: 5000                       # bound the render; larger collections truncate with a note
+discord:
+  enabled: false                        # true once DISCORD_WEBHOOK_URL is provisioned; env-gated regardless
+  timeout_seconds: 5
+upload:
+  accept_heic: true                     # M4: HEIC now accepted (heic-convert WASM); JPEG/PNG still accepted

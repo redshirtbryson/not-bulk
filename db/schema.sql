@@ -1,4 +1,4 @@
-\restrict PzmxiYfzaXh8M3ZQECL5wxOX0stRFDiczX3KJhTI9RSoVOt8ZjH2cOGc6ug5oTX
+\restrict 5YSKSU2RARIest3MEv35zsPOfK1WDIpBgMhLJOY7zkLjST5X9LZgFwXkdmgXU4P
 
 -- Dumped from database version 16.14 (Debian 16.14-1.pgdg13+1)
 -- Dumped by pg_dump version 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1)
@@ -102,6 +102,27 @@ CREATE TABLE public.corrections (
 
 
 --
+-- Name: exports; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.exports (
+    id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    kind text DEFAULT 'pdf'::text NOT NULL,
+    status text DEFAULT 'queued'::text NOT NULL,
+    storage_key text,
+    card_count integer DEFAULT 0 NOT NULL,
+    bytes bigint DEFAULT 0 NOT NULL,
+    last_error text,
+    expires_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT exports_kind_check CHECK ((kind = 'pdf'::text)),
+    CONSTRAINT exports_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'rendering'::text, 'ready'::text, 'failed'::text])))
+);
+
+
+--
 -- Name: jobs; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -121,7 +142,7 @@ CREATE TABLE public.jobs (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT jobs_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'running'::text, 'done'::text, 'failed'::text]))),
-    CONSTRAINT jobs_type_check CHECK ((type = ANY (ARRAY['detect'::text, 'identify'::text, 'fetch_source'::text, 'ingest_correction'::text, 'price'::text])))
+    CONSTRAINT jobs_type_check CHECK ((type = ANY (ARRAY['detect'::text, 'identify'::text, 'fetch_source'::text, 'ingest_correction'::text, 'price'::text, 'export'::text])))
 );
 
 
@@ -298,6 +319,14 @@ ALTER TABLE ONLY public.corrections
 
 
 --
+-- Name: exports exports_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exports
+    ADD CONSTRAINT exports_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: jobs jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -438,6 +467,13 @@ CREATE INDEX cards_photo_idx ON public.cards USING btree (photo_id);
 
 
 --
+-- Name: exports_user_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX exports_user_idx ON public.exports USING btree (user_id, created_at DESC);
+
+
+--
 -- Name: jobs_claim_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -505,6 +541,14 @@ ALTER TABLE ONLY public.corrections
 
 
 --
+-- Name: exports exports_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.exports
+    ADD CONSTRAINT exports_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
 -- Name: jobs jobs_batch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -564,7 +608,7 @@ ALTER TABLE ONLY public.usage
 -- PostgreSQL database dump complete
 --
 
-\unrestrict PzmxiYfzaXh8M3ZQECL5wxOX0stRFDiczX3KJhTI9RSoVOt8ZjH2cOGc6ug5oTX
+\unrestrict 5YSKSU2RARIest3MEv35zsPOfK1WDIpBgMhLJOY7zkLjST5X9LZgFwXkdmgXU4P
 
 
 --
@@ -574,4 +618,5 @@ ALTER TABLE ONLY public.usage
 INSERT INTO public.schema_migrations (version) VALUES
     ('001'),
     ('002'),
-    ('003');
+    ('003'),
+    ('004');
