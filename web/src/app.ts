@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Config } from "./config.js";
 import type { Mailer } from "./services/mailer.js";
+import { smtpMailer } from "./services/mailer.js";
 import { Storage } from "./services/storage.js";
 import type { gateImage } from "./services/imagegate.js";
 import type { verifyTurnstile } from "./services/turnstile.js";
@@ -17,6 +18,7 @@ import { batchesRouter } from "./routes/batches.js";
 import { progressRouter } from "./routes/progress.js";
 import { validateRouter } from "./routes/validate.js";
 import { searchRouter } from "./routes/search.js";
+import { authRoutes } from "./auth/routes.js";
 import type { PgLikeClient } from "./services/progressbus.js";
 
 const here = dirname(fileURLToPath(import.meta.url)); // .../web/src
@@ -59,6 +61,12 @@ export function createApp(deps: AppDeps): Express {
   });
 
   if (deps.sessionMiddleware) app.use(deps.sessionMiddleware);
+
+  // Mounted at the app level (no prefix, no requireUser()) so its internal /auth/*
+  // paths are seen absolute -- these ARE the auth entry points (magic-link request,
+  // verify, logout), so gating them behind requireUser() would be self-defeating.
+  const mailer = deps.mailer ?? smtpMailer(cfg);
+  app.use(authRoutes(pool, cfg, mailer));
 
   const storage = deps.storage ?? new Storage(cfg);
   app.use("/img", requireUser());

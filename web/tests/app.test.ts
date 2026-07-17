@@ -13,6 +13,7 @@ const cfg = {
     secret_key: "minioadmin",
     signed_url_ttl_seconds: 900,
   },
+  mail: { smtp_host: "127.0.0.1", smtp_port: 1025, from: "test@example.com" },
   quotas: {
     batches_per_day: 5, photos_per_day: 50, cards_per_day: 600, fetches_per_day: 20,
     photos_per_batch: 10, anon_photos_per_batch: 3,

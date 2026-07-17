@@ -11,8 +11,6 @@ import {
   anonAgent,
   makeDeps,
   makeSession,
-  expireSession,
-  idleSession,
   testCfg,
 } from './helpers.js';
 
@@ -50,19 +48,31 @@ describe('IDOR: user B cannot reach user A resources (no existence oracle)', () 
     }
   });
 
-  it('every owned POST returns 404 for a stranger', async () => {
+  it('every owned POST returns 404 for a stranger AND is byte-identical to a missing id', async () => {
     const posts = [
       (id: string) => `/cards/${id}/validate`,
       (id: string) => `/cards/${id}/skip`,
       (id: string) => `/cards/${id}/not-card`,
     ];
     for (const make of posts) {
-      const pool = new FakePool();
-      pool.enqueue({ rows: [] }); // getOwnedCard → none for B
-      const app = createApp(makeDeps({ pool }));
-      const res = await authedAgent(app, userB)
+      // Case 1: the id belongs to user A (exists, but not owned by B).
+      const p1 = new FakePool();
+      p1.enqueue({ rows: [] }); // getOwnedCard → none for B
+      const app1 = createApp(makeDeps({ pool: p1 }));
+      const owned = await authedAgent(app1, userB)
         .post(make('card-owned-by-A')).type('form').send({ card_ref_id: 'base1-4' });
-      expect(res.status).toBe(404);
+
+      // Case 2: a genuinely non-existent id.
+      const p2 = new FakePool();
+      p2.enqueue({ rows: [] }); // getOwnedCard → none, id doesn't exist at all
+      const app2 = createApp(makeDeps({ pool: p2 }));
+      const missing = await authedAgent(app2, userB)
+        .post(make('this-id-does-not-exist')).type('form').send({ card_ref_id: 'base1-4' });
+
+      expect(owned.status).toBe(404);
+      expect(missing.status).toBe(404);
+      // No existence oracle: same status AND same body.
+      expect(owned.text).toBe(missing.text);
     }
   });
 });
@@ -82,70 +92,74 @@ describe('Unauthenticated access', () => {
   });
 });
 
-describe('KNOWN GAP: /auth/* routes are not reachable through createApp', () => {
-  // src/app.ts never imports or mounts authRoutes() from src/auth/routes.ts (grep
-  // confirms no `authRoutes` reference anywhere in app.ts). Task 3's own report
-  // ("m2-task-3-report.md") explicitly deferred this wiring to "later tasks" and no
-  // task since has picked it up. This means POST /auth/logout, GET /auth/verify, and
-  // POST /auth/magic-link are all unreachable via HTTP in the deployed app today --
-  // magic-link login and logout do not work end-to-end, and this suite CANNOT exercise
-  // the brief's session-fixation scenario ("a pre-logout token is rejected after
-  // logout") through the real app, because there is no HTTP logout endpoint to call.
-  //
-  // This is flagged as a finding in m2-task-16-report.md, not silently routed around.
-  // It is NOT an ownership/IDOR bug (no cross-user data exposure) -- it is a wiring
-  // omission that breaks auth entirely. Fixing app.ts is out of scope for this
-  // test-only task; this test pins the gap so it fails loudly (rather than silently
-  // 404ing forever) once someone tries to wire it, and must be deleted/replaced by a
-  // real fixation test in the same change that adds the wiring.
-  it('POST /auth/logout 404s today because authRoutes is not mounted in createApp', async () => {
-    const pool = new FakePool();
-    const app = createApp(makeDeps({ pool }));
-    const res = await anonAgent(app).post('/auth/logout');
-    expect(res.status).toBe(404); // <- flip to 302 once app.ts mounts authRoutes()
-  });
-});
+describe('Session fixation: a token is rejected after logout', () => {
+  // src/app.ts now mounts authRoutes() from src/auth/routes.ts at the app level, so
+  // POST /auth/logout is reachable through createApp. This exercises the real
+  // session-fixation scenario end-to-end: a valid session authenticates a page route,
+  // POST /auth/logout calls destroySession() (DELETE ... WHERE token_hash = $1), and
+  // the SAME pre-logout cookie token must then be rejected -- proving logout actually
+  // invalidates the session server-side rather than merely clearing the client cookie.
 
-describe('Session lifecycle', () => {
-  // NOTE: `lookupSession` issues exactly ONE query per request (the windowed SELECT);
-  // `makeSession`'s own enqueue is for the "valid session" case only, so the
-  // expired/idle/destroyed cases below mint a bare token and enqueue just the single
-  // 0-row lookup result directly (calling makeSession first would enqueue an extra,
-  // unconsumed row and mask the real behavior under test).
-
-  it('an expired (absolute) session is rejected', async () => {
+  it('POST /auth/logout is mounted (302, not 404) and destroys the session', async () => {
     const pool = new FakePool();
-    const token = randomBytes(32).toString('base64url');
-    expireSession(pool, token); // canned row has expires_at in the past (0-row lookup)
-    const app = createApp(makeDeps({ pool, sessionMiddleware: sessionMiddleware(pool as any, testCfg) }));
-    const res = await anonAgent(app).get('/batches/b1').set('Cookie', `nb_session=${token}`);
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toBe('/');
-  });
+    const app = createApp(
+      makeDeps({ pool, sessionMiddleware: sessionMiddleware(pool as any, testCfg) }),
+    );
 
-  it('an idle-timed-out session is rejected', async () => {
-    const pool = new FakePool();
-    const token = randomBytes(32).toString('base64url');
-    idleSession(pool, token); // last_seen_at older than idle window (0-row lookup)
-    const app = createApp(makeDeps({ pool, sessionMiddleware: sessionMiddleware(pool as any, testCfg) }));
-    const res = await anonAgent(app).get('/batches/b1').set('Cookie', `nb_session=${token}`);
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toBe('/');
-  });
+    // Pre-logout: the token authenticates (control, proves the token was ever valid).
+    // FakePool is a strict FIFO queue shared by sessionMiddleware + the route, so rows
+    // must be enqueued in the exact order the request issues queries: lookupSession,
+    // touchSession, then getOwnedBatch + snapshot()'s 6 queries.
+    const { token } = makeSession(pool, userA); // lookupSession's windowed SELECT
+    pool.enqueue({ rows: [] }); // touchSession no-op
+    pool.enqueue({ rows: [{ id: 'b1', user_id: userA.id, status: 'processing', photo_count: 1, origin_url: null, created_at: new Date().toISOString() }] }); // getOwnedBatch
+    pool.enqueue({ rows: [{ n: 0 }] }); // snapshot() photos_done
+    pool.enqueue({ rows: [{ n: 0 }] }); // snapshot() cards_total
+    pool.enqueue({ rows: [{ n: 0 }] }); // snapshot() cards_identified
+    pool.enqueue({ rows: [{ n: 0 }] }); // snapshot() cards_validation
+    pool.enqueue({ rows: [{ n: 0 }] }); // snapshot() cards_unreadable
+    pool.enqueue({ rows: [] }); // snapshot() ticker
+    const before = await anonAgent(app).get('/batches/b1').set('Cookie', `nb_session=${token}`);
+    expect(before.status).toBe(200);
 
-  it('a token whose session row is gone (e.g. destroyed by logout) is rejected', async () => {
-    // Exercises the same "dead token" path a post-logout fixation attempt hits:
-    // lookupSession finds no row, so requireUser() must redirect, not authenticate.
-    const pool = new FakePool();
-    const token = randomBytes(32).toString('base64url');
-    pool.enqueue({ rows: [] }); // session row now gone (deleted) → lookup returns nothing
-    const app = createApp(makeDeps({ pool, sessionMiddleware: sessionMiddleware(pool as any, testCfg) }));
+    // Logout: authRoutes is mounted, so this reaches destroySession() and 302s -- not 404.
+    pool.enqueue({ rows: [] }); // destroySession's DELETE
+    const logout = await anonAgent(app).post('/auth/logout').set('Cookie', `nb_session=${token}`);
+    expect(logout.status).toBe(302);
+
+    // Post-logout: lookupSession now finds no row for the same token (session row deleted).
+    pool.enqueue({ rows: [] });
     const after = await anonAgent(app).get('/batches/b1').set('Cookie', `nb_session=${token}`);
     expect(after.status).toBe(302);
     expect(after.headers.location).toBe('/');
   });
+});
 
-  it('a valid, non-expired session reaches the route (control: proves the 302s above are real rejections, not a broken app)', async () => {
+describe('Session lifecycle', () => {
+  // `lookupSession` issues exactly ONE query per request: a single windowed SELECT
+  // that ANDs together the absolute-expiry, idle-timeout, and active-user predicates
+  // (see src/auth/sessions.ts). From the HTTP layer, "expired", "idle-timed-out", and
+  // "row deleted by logout" are indistinguishable: all three produce a 0-row result
+  // from that one query, and requireUser() reacts identically (302 to /) regardless of
+  // WHICH predicate excluded the row. A fake pool that just enqueues {rows: []} cannot
+  // tell these cases apart, so three separately-named tests asserting the same
+  // enqueue-then-302 shape would overstate coverage -- they don't independently
+  // exercise the three SQL predicates, only the single "no row → reject" branch.
+  // (The predicates themselves are covered by static presence in sessions.ts, not
+  // behaviorally here.) Collapsed to one honestly-named test; the positive-control
+  // "valid session reaches the route" test below stays separate and intact.
+
+  it('rejects when lookupSession finds no valid session (expired / idle / destroyed all produce this)', async () => {
+    const pool = new FakePool();
+    const token = randomBytes(32).toString('base64url');
+    pool.enqueue({ rows: [] }); // windowed SELECT returns no row, regardless of which predicate excluded it
+    const app = createApp(makeDeps({ pool, sessionMiddleware: sessionMiddleware(pool as any, testCfg) }));
+    const res = await anonAgent(app).get('/batches/b1').set('Cookie', `nb_session=${token}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/');
+  });
+
+  it('a valid, non-expired session reaches the route (control: proves the 302 above is a real rejection, not a broken app)', async () => {
     const pool = new FakePool();
     const { token } = makeSession(pool, userA); // one valid-session row
     pool.enqueue({ rows: [{ id: 'b1', user_id: userA.id, status: 'processing', photo_count: 1, origin_url: null, created_at: new Date().toISOString() }] }); // getOwnedBatch
