@@ -25,11 +25,14 @@ _REQUIRED_KEYS: dict[str, set[str]] = {
 
 _BACKOFF_STEP_SECONDS = 30
 
-# Exact claim SQL from the Interface Contract.
+# Exact claim SQL from the Interface Contract, extended with a type partition:
+# the inner SELECT gains `AND type = ANY(%s)` so N workers of different classes
+# (Python pipeline vs Node export) never claim each other's jobs.
 _CLAIM_SQL = (
     "UPDATE jobs SET status='running', locked_at=now(), locked_by=%s, "
     "attempts=attempts+1, updated_at=now() "
     "WHERE id=(SELECT id FROM jobs WHERE status='queued' AND run_after<=now() "
+    "AND type = ANY(%s) "
     "ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED) "
     "RETURNING id, type, payload"
 )
@@ -109,12 +112,18 @@ def backoff_seconds(attempts: int) -> int:
     return _BACKOFF_STEP_SECONDS * attempts
 
 
-def claim(pool, worker_id: str) -> tuple[str, str, dict] | None:
-    """Atomically claim the oldest runnable job. Returns (id, type, payload)
-    or None. payload is already a dict (jsonb decodes to dict via psycopg)."""
+def claim(pool, worker_id: str, allowed_types: tuple[str, ...]) -> tuple[str, str, dict] | None:
+    """Atomically claim the oldest runnable job whose type is in allowed_types.
+    Returns (id, type, payload) or None. payload is already a dict (jsonb decodes
+    to dict via psycopg).
+
+    allowed_types partitions the shared jobs table: the Python pipeline worker
+    passes its handler types; the Node export worker claims only 'export'. A
+    worker must never claim a type it has no handler for (it would dead-letter).
+    """
     with pool.connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(_CLAIM_SQL, (worker_id,))
+            cur.execute(_CLAIM_SQL, (worker_id, list(allowed_types)))
             row = cur.fetchone()
         conn.commit()
     if row is None:

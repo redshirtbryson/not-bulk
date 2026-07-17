@@ -29,6 +29,7 @@ def test_terminal_failure_emits_error_notify_with_class_only(monkeypatch):
     handled = worker._process_one(
         pool, storage=None, cfg=TEST_CFG,
         handlers={"detect": _boom_handler}, worker_id="w1",
+        allowed_types=("detect",),
     )
     assert handled is True
     assert len(spy) == 1
@@ -53,5 +54,6 @@ def test_success_emits_no_notify(monkeypatch):
     worker._process_one(
         pool, storage=None, cfg=TEST_CFG,
         handlers={"detect": lambda *a: None}, worker_id="w1",
+        allowed_types=("detect",),
     )
     assert spy == []

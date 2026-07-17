@@ -122,6 +122,26 @@ def test_notify_progress_omits_absent_ids():
     assert json.loads(params[1]) == {"batch_id": "batch-1", "event": "batch_complete"}
 
 
+def test_claim_binds_allowed_types_into_sql():
+    """The inner SELECT gains `AND type = ANY(%s)` bound to list(allowed_types)
+    — parameterized, never interpolated. FakePool returns a detect row."""
+    pool = FakePool([[("job-1", "detect", {"photo_id": "p1"})]])
+    claimed = jobqueue.claim(pool, "w1", allowed_types=("detect", "identify"))
+    assert claimed == ("job-1", "detect", {"photo_id": "p1"})
+    sql, params = pool.cursor.executed[0]
+    nospace = sql.lower().replace(" ", "")
+    assert "type=any(%s)" in nospace                 # the type filter is present
+    # params: (worker_id, [allowed types]) — the list is a bound parameter.
+    assert params[0] == "w1"
+    assert params[1] == ["detect", "identify"]       # list(), bound not interpolated
+
+
+def test_claim_returns_none_when_no_matching_type():
+    """No queued row of an allowed type -> FakePool yields [] -> None."""
+    pool = FakePool([[]])
+    assert jobqueue.claim(pool, "w1", allowed_types=("detect",)) is None
+
+
 # ---- integration against the REAL local Postgres --------------------------
 
 import uuid as _uuid  # noqa: E402  (kept beside the integration block)
@@ -162,7 +182,7 @@ def test_claim_reclaim_backoff_against_real_db():
         _insert(ids[1], 20)
         _insert(ids[2], 10)
 
-        first = jq.claim(pool, "w1")
+        first = jq.claim(pool, "w1", allowed_types=("detect",))
         assert first is not None and first[0] == ids[0]
         assert first[1] == "detect"
         assert first[2] == {"photo_id": tag}
@@ -173,7 +193,7 @@ def test_claim_reclaim_backoff_against_real_db():
         try:
             with conn_a.cursor() as cur:
                 cur.execute("SELECT id FROM jobs WHERE id=%s FOR UPDATE", (ids[1],))
-                skipped = jq.claim(pool, "w2")
+                skipped = jq.claim(pool, "w2", allowed_types=("detect",))
                 assert skipped is not None and skipped[0] == ids[2]
         finally:
             conn_a.rollback()
@@ -217,5 +237,67 @@ def test_claim_reclaim_backoff_against_real_db():
         with pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM jobs WHERE payload->>'photo_id' = %s", (tag,))
+            conn.commit()
+        pool.close()
+
+
+@pytest.mark.skipif(
+    not os.environ.get("DATABASE_URL"),
+    reason="DATABASE_URL not set (export the compose-local DSN to run this)",
+)
+def test_type_partitioned_claim_against_real_db():
+    """A mix of queued types: a detect-only worker claims only detect jobs and
+    SKIPs a queued price job; two allowed-type sets partition the queue cleanly
+    (no job claimed twice, no job of the wrong class claimed). Self-cleaning."""
+    import os as _os
+
+    from psycopg_pool import ConnectionPool
+
+    from notbulk import jobqueue as jq
+
+    dsn = _os.environ["DATABASE_URL"]
+    pool = ConnectionPool(conninfo=dsn, min_size=1, max_size=4, open=True)
+    tag = f"itest-{_uuid.uuid4().hex[:8]}"
+
+    def _insert(job_type, payload):
+        job_id = str(_uuid.uuid4())
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO jobs (id, type, payload, status) VALUES (%s, %s, %s, 'queued')",
+                    (job_id, job_type, json.dumps(payload)),
+                )
+            conn.commit()
+        return job_id
+
+    try:
+        d1 = _insert("detect", {"photo_id": tag})
+        p1 = _insert("price", {"card_ref_id": tag, "finish": "normal"})
+        d2 = _insert("detect", {"photo_id": tag})
+
+        # A detect-only worker claims both detect jobs and never the price job.
+        claimed_detect = []
+        while True:
+            c = jq.claim(pool, "w-detect", allowed_types=("detect",))
+            if c is None:
+                break
+            if c[2].get("photo_id") == tag or c[2].get("card_ref_id") == tag:
+                claimed_detect.append((c[0], c[1]))
+        claimed_ids = {jid for jid, _ in claimed_detect}
+        assert claimed_ids == {d1, d2}
+        assert all(t == "detect" for _, t in claimed_detect)
+        assert p1 not in claimed_ids                 # price job SKIPPED by type filter
+
+        # The price job is still queued and claimable by a price-class worker.
+        c_price = jq.claim(pool, "w-price", allowed_types=("price",))
+        assert c_price is not None and c_price[0] == p1 and c_price[1] == "price"
+    finally:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM jobs WHERE payload->>'photo_id' = %s "
+                    "OR payload->>'card_ref_id' = %s",
+                    (tag, tag),
+                )
             conn.commit()
         pool.close()

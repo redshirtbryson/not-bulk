@@ -56,9 +56,9 @@ class _Stopper:
         self.stop = True
 
 
-def _process_one(pool, storage, cfg, handlers, worker_id: str) -> bool:
+def _process_one(pool, storage, cfg, handlers, worker_id: str, allowed_types: tuple[str, ...]) -> bool:
     """Claim and run a single job. Returns True if a job was processed."""
-    claimed = jobqueue.claim(pool, worker_id)
+    claimed = jobqueue.claim(pool, worker_id, allowed_types)
     if claimed is None:
         return False
     job_id, job_type, payload = claimed
@@ -129,6 +129,12 @@ def main() -> None:
     pool = ConnectionPool(conninfo=dsn, min_size=1, max_size=4, open=True)
     storage = Storage(cfg)
     handlers = _build_handlers()
+    # The Python pipeline worker claims ONLY its handler types (queue partition
+    # invariant): the Node export worker owns 'export'. Deriving allowed_types
+    # from the handler keys makes drift impossible — every claimed type has a
+    # handler, so a claimed job can never dead-letter for lack of one.
+    allowed_types = tuple(sorted(handlers))
+    assert all(t in handlers for t in allowed_types), "allowed_types must all have handlers"
     worker_id = f"{socket.gethostname()}:{os.getpid()}"
 
     stopper = _Stopper()
@@ -151,7 +157,7 @@ def main() -> None:
     try:
         while not stopper.stop:
             # Drain everything claimable right now.
-            while not stopper.stop and _process_one(pool, storage, cfg, handlers, worker_id):
+            while not stopper.stop and _process_one(pool, storage, cfg, handlers, worker_id, allowed_types):
                 pass
 
             if time.monotonic() - last_reclaim >= _RECLAIM_EVERY_SECONDS:
